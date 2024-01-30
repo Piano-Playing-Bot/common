@@ -1,6 +1,11 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
+#define AIL_ALL_IMPL
+#define AIL_BUF_IMPL
+#include "ail.h"
+#include "ail_buf.h"
+
 // #define UI_DEBUG
 
 #ifdef UI_DEBUG
