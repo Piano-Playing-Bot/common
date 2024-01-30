@@ -1,7 +1,7 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
-#define AIL_ALL_IMPL
+#define AIL_DA_IMPL
 #define AIL_BUF_IMPL
 #include "ail/ail.h"
 #include "ail/ail_buf.h"
@@ -14,6 +14,10 @@
 #else
 #define DBG_LOG(...) do { if (0) printf(__VA_ARGS__); } while(0)
 #endif
+
+//////////////
+//   PIDI   //
+//////////////
 
 // @Note on time: The idea is to use discretized clock-cycles for measuring time.
 // The time parameter in MusicChunk represents at which millisecond the chunk should start playing
@@ -51,5 +55,26 @@ typedef struct {
     AIL_DA(MusicChunk) chunks;
 } Song;
 AIL_DA_INIT(Song);
+
+
+//////////////
+//   SPPP   //
+//////////////
+
+typedef enum ClientMsgType {
+  NONE, // If no message came in
+  PING,
+  PIDI,
+  STOP,
+  JUMP,
+} ClientMsgType;
+
+typedef struct ClientMsg {
+  ClientMsgType type;
+  union {
+    Song *song;
+    size_t time;
+  } data;
+} ClientMsg;
 
 #endif // COMMON_H_
