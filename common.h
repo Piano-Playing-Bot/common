@@ -3,8 +3,8 @@
 
 #define AIL_ALL_IMPL
 #define AIL_BUF_IMPL
-#include "ail.h"
-#include "ail_buf.h"
+#include "ail/ail.h"
+#include "ail/ail_buf.h"
 
 // #define UI_DEBUG
 
