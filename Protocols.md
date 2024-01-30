@@ -28,6 +28,8 @@ A PIDI file follows the following format:
 <Magic Bytes: 4 bytes> <Chunks Amount: 4 bytes> <Chunks>
 ```
 
+Unless otherwise specified, small-endian encoding is used.
+
 - **Magic Bytes:**
 The format's Magic bytes are: `PIDI`. It is always written in big-endian format. It stands for 'Piano Digital Interface'.
 
@@ -94,6 +96,8 @@ A PDIL file follows the following format:
 <Magic Bytes: 4 bytes> <Amount: 4 bytes> <Song-Infos>
 ```
 
+Unless otherwise specified, small-endian encoding is used.
+
 - **Magic Bytes:**
 The format's Magic bytes are: `PDIL`. It is always written in big-endian format. It stands for 'Piano Digital Interface Library'.
 
@@ -139,6 +143,8 @@ Any message between the server and client has the following format:
 <Magic Bytes: 4 bytes> <Message-Type: 4 bytes> <Size: 8 bytes> <Message: Size bytes>
 ```
 
+Unless otherwise specified, small-endian encoding is used.
+
 - **Magic Bytes:**
 The protocol's Magic bytes are: `SPPP`. It is always written in big-endian format. It stands for 'Self-Playing-Piano Protocol'.
 
@@ -175,7 +181,13 @@ The succ message is only sent by the server as a response to the client. It indi
 
 ### 'STOP'
 
-The stop message is only sent by the client. It tells the server to stop/continue the current song. The first stop message should stop the song, while the next should continue it. The next one then would stop it again and so on. The message bytes should be empty or ignored.
+The stop message is only sent by the client. It tells the server to stop the current song. The message bytes should be empty or ignored.
+
+The server has to respond with a 'SUCC' message.
+
+### 'CONT'
+
+The cont message is only sent by the client. It tells the server to continue the current song. The message bytes should be empty or ignored.
 
 The server has to respond with a 'SUCC' message.
 
