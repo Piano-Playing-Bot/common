@@ -74,7 +74,8 @@ MusicChunk decode_chunk(AIL_Buffer *buf) {
 
 void print_chunk(MusicChunk chunk)
 {
-     DBG_LOG("{ key: %2s, octave: %2d, on: %c, time: %lld, len: %d }\n", key_strs[c.key], c.octave, c.on ? 'y' : 'n', c.time, c.len);
+    static const char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    DBG_LOG("{ key: %2s, octave: %2d, on: %c, time: %lld, len: %d }\n", key_strs[c.key], c.octave, c.on ? 'y' : 'n', c.time, c.len);
 }
 
 typedef struct {
