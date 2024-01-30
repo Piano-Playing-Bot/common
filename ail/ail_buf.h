@@ -157,23 +157,22 @@ AIL_BUF_DEF_INLINE bool ail_buf_to_file(AIL_Buffer *buf, const char *filename)
 
 AIL_BUF_DEF_INLINE AIL_Buffer ail_buf_new(u64 cap)
 {
-	AIL_Buffer buf = {
-		.data = AIL_BUF_MALLOC(cap),
-		.len  = 0,
-		.cap  = cap,
-		.idx  = 0
-	};
+	AIL_Buffer buf;
+	buf.data = AIL_BUF_MALLOC(cap);
+	buf.len  = 0;
+	buf.cap  = cap;
+	buf.idx  = 0;
 	return buf;
 }
 
 AIL_BUF_DEF_INLINE AIL_Buffer ail_buf_from_data(u8 *data, u64 len, u64 idx)
 {
-	return (AIL_Buffer) {
-		.data = data,
-		.idx  = idx,
-		.len  = len,
-		.cap  = len,
-	};
+	AIL_Buffer buf;
+	buf.data = data;
+	buf.idx  = idx;
+	buf.len  = len;
+	buf.cap  = len;
+	return buf;
 }
 
 AIL_BUF_DEF_INLINE void ail_buf_free(AIL_Buffer buf)
