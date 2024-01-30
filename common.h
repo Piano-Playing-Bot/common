@@ -72,7 +72,7 @@ MusicChunk decode_chunk(AIL_Buffer *buf) {
     return chunk;
 }
 
-void print_chunk(MusicChunk chunk)
+void print_chunk(MusicChunk c)
 {
     static const char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
     DBG_LOG("{ key: %2s, octave: %2d, on: %c, time: %lld, len: %d }\n", key_strs[c.key], c.octave, c.on ? 'y' : 'n', c.time, c.len);
@@ -87,7 +87,6 @@ AIL_DA_INIT(Song);
 
 void print_song(Song song)
 {
-    char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
     DBG_LOG("{\n  name: %s\n  len: %lldms\n  chunks: [\n", song.name, song.len);
     for (u32 i = 0; i < song.chunks.len; i++) {
         DBG_LOG("  ");
@@ -120,7 +119,6 @@ typedef enum ClientMsgType {
 } ClientMsgType;
 
 typedef enum ServerMsgType {
-  MSG_NONE = 0, // If no message came in
   MSG_PONG = ('P' << 24) | ('O' << 16) | ('N' << 8) | ('G' << 0),
   MSG_SUCC = ('S' << 24) | ('U' << 16) | ('C' << 8) | ('C' << 0),
 } ServerMsgType;
