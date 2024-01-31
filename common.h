@@ -16,6 +16,8 @@
 #endif // UI_DEBUG
 #endif // DBG_LOG
 
+#define BAUD 230400UL
+
 //////////////
 //   PIDI   //
 //////////////
@@ -24,7 +26,7 @@
 // The time parameter in MusicChunk represents at which millisecond the chunk should start playing
 // The len paramter in MusicChunk represents how many milliseconds the chunk should take to be completed
 
-u32 PIDI_MAGIC = ('P' << 24) | ('I' << 16) | ('D' << 8) | ('I' << 0);
+u32 PIDI_MAGIC = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0);
 
 typedef enum {
     PIANO_KEY_C = 0,
@@ -100,27 +102,31 @@ void print_song(Song song)
 //   PDIL   //
 //////////////
 
-u32 PDIL_MAGIC = ('P' << 24) | ('D' << 16) | ('I' << 8) | ('L' << 0);
+u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) | (((u32)'I') << 8) | (((u32)'L') << 0);
 
 
 //////////////
 //   SPPP   //
 //////////////
 
-u32 SPPP_MAGIC = ('S' << 24) | ('P' << 16) | ('P' << 8) | ('P' << 0);
+#define MAX_CHUNKS_AMOUNT   (1200 / ENCODED_MUSIC_CHUNK_LEN)
+#define MAX_CLIENT_MSG_SIZE (12 + MAX_CHUNKS_AMOUNT)
+#define MAX_SERVER_MSG_SIZE 12
+
+u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8) | (((u32)'P') << 0);
 
 typedef enum ClientMsgType {
   MSG_NONE = 0, // If no message came in
-  MSG_PING = ('P' << 24) | ('I' << 16) | ('N' << 8) | ('G' << 0),
-  MSG_PIDI = ('P' << 24) | ('I' << 16) | ('D' << 8) | ('I' << 0),
-  MSG_STOP = ('S' << 24) | ('T' << 16) | ('O' << 8) | ('P' << 0),
-  MSG_CONT = ('C' << 24) | ('O' << 16) | ('N' << 8) | ('T' << 0),
-  MSG_JUMP = ('J' << 24) | ('U' << 16) | ('M' << 8) | ('P' << 0),
+  MSG_PING = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'N') << 8) | (((u32)'G') << 0),
+  MSG_PIDI = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0),
+  MSG_STOP = (((u32)'S') << 24) | (((u32)'T') << 16) | (((u32)'O') << 8) | (((u32)'P') << 0),
+  MSG_CONT = (((u32)'C') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'T') << 0),
+  MSG_JUMP = (((u32)'J') << 24) | (((u32)'U') << 16) | (((u32)'M') << 8) | (((u32)'P') << 0),
 } ClientMsgType;
 
 typedef enum ServerMsgType {
-  MSG_PONG = ('P' << 24) | ('O' << 16) | ('N' << 8) | ('G' << 0),
-  MSG_SUCC = ('S' << 24) | ('U' << 16) | ('C' << 8) | ('C' << 0),
+  MSG_PONG = (((u32)'P') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'G') << 0),
+  MSG_SUCC = (((u32)'S') << 24) | (((u32)'U') << 16) | (((u32)'C') << 8) | (((u32)'C') << 0),
 } ServerMsgType;
 
 typedef struct ClientMsg {
