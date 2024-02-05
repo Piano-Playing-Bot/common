@@ -16,7 +16,7 @@
 #endif // UI_DEBUG
 #endif // DBG_LOG
 
-#define BAUD 230400UL
+#define BAUD_RATE 9600UL // 230400UL
 
 //////////////
 //   PIDI   //
@@ -44,6 +44,7 @@ typedef enum {
     PIANO_KEY_AMOUNT,
 } PianoKey;
 
+#define MAX_VELOCITY UINT16_MAX
 // A MusicChunk represents whether a note should be played or stopped being played, the time at which this should happen, how long the transition from not-playing to playing (or vice versa) should take and which note exactly should be played
 typedef struct {
     u64  time;   // The clock-cycle on which to start playing this note
