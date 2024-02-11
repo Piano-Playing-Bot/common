@@ -110,7 +110,7 @@ u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) | (((u32)'I') << 8) | (
 //   SPPP   //
 //////////////
 
-#define MAX_CHUNKS_AMOUNT   (1200 / ENCODED_MUSIC_CHUNK_LEN)
+#define MAX_CHUNKS_AMOUNT   (1000 / ENCODED_MUSIC_CHUNK_LEN)
 #define MAX_CLIENT_MSG_SIZE (12 + MAX_CHUNKS_AMOUNT)
 #define MAX_SERVER_MSG_SIZE 12
 
