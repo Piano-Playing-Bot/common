@@ -56,14 +56,14 @@ SOFTWARE.
 #endif // AIL_FS_MALLOC
 
 #ifndef AIL_FS_READ_TIMEOUT
-#define AIL_FS_READ_TIMEOUT 500 // in milliseconds
+#define AIL_FS_READ_TIMEOUT 50 // in milliseconds
 #endif // AIL_FS_READ_TIMEOUT
 #ifndef AIL_FS_WRITE_TIMEOUT
-#define AIL_FS_WRITE_TIMEOUT 500 // in milliseconds
+#define AIL_FS_WRITE_TIMEOUT 50 // in milliseconds
 #endif // AIL_FS_WRITE_TIMEOUT
 #ifndef AIL_FS_MAX_ATTEMPTS
 #define AIL_FS_MAX_ATTEMPTS 8
-#endf // AIL_FS_MAX_ATTEMPTS
+#endif // AIL_FS_MAX_ATTEMPTS
 
 #ifdef _WIN32
     #include <windows.h>
