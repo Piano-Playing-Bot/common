@@ -45,13 +45,15 @@ typedef enum {
 } PianoKey;
 
 #define MAX_VELOCITY UINT16_MAX
+// @Memory: Having a chunk struct for each on/off is useful for a simple implementation & translation from MIDI, but increases memory requirements by double
+// Alternative approach would encode the length for playing the chunk
 // A MusicChunk represents whether a note should be played or stopped being played, the time at which this should happen, how long the transition from not-playing to playing (or vice versa) should take and which note exactly should be played
 typedef struct {
-    u64  time;   // The clock-cycle on which to start playing this note
-    u16  len;    // The amount of clock cycles, that playing this note should take
-    PianoKey  key;    // The note's key
-    i8   octave; // Which octave the key should be played on (zero is the middle octave)
-    bool on;     // Whether the note should be played (true) or not (false)
+    u64  time;     // The millisecond after song-start on which to start playing this note
+    u8   velocity; // The strength with which the note should be played
+    i8   octave;   // Which octave the key should be played on (zero is the middle octave)
+    bool on;       // Whether the note should be played (true) or not (false)
+    PianoKey key;  // The note's key
 } MusicChunk;
 AIL_DA_INIT(MusicChunk);
 
@@ -59,26 +61,26 @@ AIL_DA_INIT(MusicChunk);
 
 void encode_chunk(AIL_Buffer *buf, MusicChunk chunk) {
     ail_buf_write8lsb(buf, chunk.time);
-    ail_buf_write2lsb(buf, chunk.len);
-    ail_buf_write1   (buf, chunk.key);
-    ail_buf_write1   (buf, (u8) chunk.octave);
-    ail_buf_write1   (buf, (u8) chunk.on);
+    ail_buf_write1(buf, chunk.velocity);
+    ail_buf_write1(buf, chunk.key);
+    ail_buf_write1(buf, (u8) chunk.octave);
+    ail_buf_write1(buf, (u8) chunk.on);
 }
 
 MusicChunk decode_chunk(AIL_Buffer *buf) {
     MusicChunk chunk;
-    chunk.time   = ail_buf_read8lsb(buf);
-    chunk.len    = ail_buf_read2lsb(buf);
-    chunk.key    = ail_buf_read1(buf);
-    chunk.octave = (i8) ail_buf_read1(buf);
-    chunk.on     = (bool) ail_buf_read1(buf);
+    chunk.time     = ail_buf_read8lsb(buf);
+    chunk.velocity = ail_buf_read1(buf);
+    chunk.key      = ail_buf_read1(buf);
+    chunk.octave   = (i8) ail_buf_read1(buf);
+    chunk.on       = (bool) ail_buf_read1(buf);
     return chunk;
 }
 
 void print_chunk(MusicChunk c)
 {
     static const char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    DBG_LOG("{ key: %2s, octave: %2d, on: %c, time: %lld, len: %d }\n", key_strs[c.key], c.octave, c.on ? 'y' : 'n', c.time, c.len);
+    DBG_LOG("{ key: %2s, octave: %2d, on: %c, time: %lld, velocity: %d }\n", key_strs[c.key], c.octave, c.on ? 'y' : 'n', c.time, c.velocity);
 }
 
 typedef struct {
