@@ -16,15 +16,13 @@
 #endif // UI_DEBUG
 #endif // DBG_LOG
 
-#define BAUD_RATE 9600UL // 230400UL
-
 //////////////
 //   PIDI   //
 //////////////
 
 // @Note on time: The idea is to use discretized clock-cycles for measuring time.
-// The time parameter in MusicChunk represents at which millisecond the chunk should start playing
-// The len paramter in MusicChunk represents how many milliseconds the chunk should take to be completed
+// The time parameter in PidiCmd represents at which millisecond the cmd should start playing
+// The len paramter in PidiCmd represents how many milliseconds the cmd should take to be completed
 
 u32 PIDI_MAGIC = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0);
 
@@ -45,39 +43,39 @@ typedef enum {
 } PianoKey;
 
 #define MAX_VELOCITY UINT16_MAX
-// @Memory: Having a chunk struct for each on/off is useful for a simple implementation & translation from MIDI, but increases memory requirements by double
-// Alternative approach would encode the length for playing the chunk
-// A MusicChunk represents whether a note should be played or stopped being played, the time at which this should happen, how long the transition from not-playing to playing (or vice versa) should take and which note exactly should be played
+// @Memory: Having a cmd struct for each on/off is useful for a simple implementation & translation from MIDI, but increases memory requirements by double
+// Alternative approach would encode the length for playing the cmd
+// A PidiCmd represents whether a note should be played or stopped being played, the time at which this should happen and which specific key on the piano this command refers to
 typedef struct {
     u64  time;     // The millisecond after song-start on which to start playing this note
     u8   velocity; // The strength with which the note should be played
     i8   octave;   // Which octave the key should be played on (zero is the middle octave)
     bool on;       // Whether the note should be played (true) or not (false)
     PianoKey key;  // The note's key
-} MusicChunk;
-AIL_DA_INIT(MusicChunk);
+} PidiCmd;
+AIL_DA_INIT(PidiCmd);
 
 #define ENCODED_MUSIC_CHUNK_LEN 13
 
-void encode_chunk(AIL_Buffer *buf, MusicChunk chunk) {
-    ail_buf_write8lsb(buf, chunk.time);
-    ail_buf_write1(buf, chunk.velocity);
-    ail_buf_write1(buf, chunk.key);
-    ail_buf_write1(buf, (u8) chunk.octave);
-    ail_buf_write1(buf, (u8) chunk.on);
+void encode_cmd(AIL_Buffer *buf, PidiCmd cmd) {
+    ail_buf_write8lsb(buf, cmd.time);
+    ail_buf_write1(buf, cmd.velocity);
+    ail_buf_write1(buf, cmd.key);
+    ail_buf_write1(buf, (u8) cmd.octave);
+    ail_buf_write1(buf, (u8) cmd.on);
 }
 
-MusicChunk decode_chunk(AIL_Buffer *buf) {
-    MusicChunk chunk;
-    chunk.time     = ail_buf_read8lsb(buf);
-    chunk.velocity = ail_buf_read1(buf);
-    chunk.key      = ail_buf_read1(buf);
-    chunk.octave   = (i8) ail_buf_read1(buf);
-    chunk.on       = (bool) ail_buf_read1(buf);
-    return chunk;
+PidiCmd decode_cmd(AIL_Buffer *buf) {
+    PidiCmd cmd;
+    cmd.time     = ail_buf_read8lsb(buf);
+    cmd.velocity = ail_buf_read1(buf);
+    cmd.key      = ail_buf_read1(buf);
+    cmd.octave   = (i8) ail_buf_read1(buf);
+    cmd.on       = (bool) ail_buf_read1(buf);
+    return cmd;
 }
 
-void print_chunk(MusicChunk c)
+void print_cmd(PidiCmd c)
 {
     static const char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
     DBG_LOG("{ key: %2s, octave: %2d, on: %c, time: %lld, velocity: %d }\n", key_strs[c.key], c.octave, c.on ? 'y' : 'n', c.time, c.velocity);
@@ -86,16 +84,16 @@ void print_chunk(MusicChunk c)
 typedef struct {
     char *name;  // Name of the Song, that is shown in the UI
     u64   len;   // Length in milliseconds of the entire Song
-    AIL_DA(MusicChunk) chunks;
+    AIL_DA(PidiCmd) cmds;
 } Song;
 AIL_DA_INIT(Song);
 
 void print_song(Song song)
 {
-    DBG_LOG("{\n  name: %s\n  len: %lldms\n  chunks: [\n", song.name, song.len);
-    for (u32 i = 0; i < song.chunks.len; i++) {
+    DBG_LOG("{\n  name: %s\n  len: %lldms\n  cmds: [\n", song.name, song.len);
+    for (u32 i = 0; i < song.cmds.len; i++) {
         DBG_LOG("  ");
-        print_chunk(song.chunks.data[i]);
+        print_cmd(song.cmds.data[i]);
     }
     DBG_LOG("  ]\n}\n");
 }
@@ -112,7 +110,8 @@ u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) | (((u32)'I') << 8) | (
 //   SPPP   //
 //////////////
 
-#define MAX_CHUNKS_AMOUNT   (1000 / ENCODED_MUSIC_CHUNK_LEN)
+#define BAUD_RATE 9600UL // 230400UL
+#define CMDS_LIST_LEN (500 / ENCODED_MUSIC_CHUNK_LEN)
 #define MAX_CLIENT_MSG_SIZE (12 + MAX_CHUNKS_AMOUNT)
 #define MAX_SERVER_MSG_SIZE 12
 
@@ -124,7 +123,8 @@ typedef enum ClientMsgType {
   MSG_PIDI = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0),
   MSG_STOP = (((u32)'S') << 24) | (((u32)'T') << 16) | (((u32)'O') << 8) | (((u32)'P') << 0),
   MSG_CONT = (((u32)'C') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'T') << 0),
-  MSG_JUMP = (((u32)'J') << 24) | (((u32)'U') << 16) | (((u32)'M') << 8) | (((u32)'P') << 0),
+  MSG_LOUD = (((u32)'L') << 24) | (((u32)'O') << 16) | (((u32)'U') << 8) | (((u32)'D') << 0),
+  MSG_SPED = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'E') << 8) | (((u32)'D') << 0),
 } ClientMsgType;
 
 typedef enum ServerMsgType {
@@ -134,8 +134,8 @@ typedef enum ServerMsgType {
 
 typedef struct ClientMsg {
   ClientMsgType type;
-  u64 n; // Dependingon the message type, this is either the time or the length of the chunks array
-  MusicChunk *chunks;
+  u64 n; // Dependingon the message type, this is either the time or the length of the cmds array
+  PidiCmd *cmds;
 } ClientMsg;
 
 #endif // COMMON_H_
