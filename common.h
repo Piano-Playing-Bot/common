@@ -1,6 +1,10 @@
 #ifndef COMMON_H_
 #define COMMON_H_
 
+#ifndef CONST_VAR
+#define CONST_VAR
+#endif // CONST_VAR
+
 #define AIL_DA_IMPL
 #define AIL_BUF_IMPL
 #include "ail/ail.h"
@@ -20,11 +24,7 @@
 //   PIDI   //
 //////////////
 
-// @Note on time: The idea is to use discretized clock-cycles for measuring time.
-// The time parameter in PidiCmd represents at which millisecond the cmd should start playing
-// The len paramter in PidiCmd represents how many milliseconds the cmd should take to be completed
-
-u32 PIDI_MAGIC = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0);
+static const CONST_VAR u32 PIDI_MAGIC = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0);
 
 typedef enum {
     PIANO_KEY_C = 0,
@@ -42,7 +42,7 @@ typedef enum {
     PIANO_KEY_AMOUNT,
 } PianoKey;
 
-#define MAX_VELOCITY UINT16_MAX
+#define MAX_VELOCITY UINT8_MAX
 // @Memory: Having a cmd struct for each on/off is useful for a simple implementation & translation from MIDI, but increases memory requirements by double
 // Alternative approach would encode the length for playing the cmd
 // A PidiCmd represents whether a note should be played or stopped being played, the time at which this should happen and which specific key on the piano this command refers to
@@ -55,6 +55,7 @@ typedef struct {
 } PidiCmd;
 AIL_DA_INIT(PidiCmd);
 
+// @TODO: Rename into ENCODED_CMD_LEN
 #define ENCODED_MUSIC_CHUNK_LEN 13
 
 void encode_cmd(AIL_Buffer *buf, PidiCmd cmd) {
@@ -103,39 +104,92 @@ void print_song(Song song)
 //   PDIL   //
 //////////////
 
-u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) | (((u32)'I') << 8) | (((u32)'L') << 0);
+static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) | (((u32)'I') << 8) | (((u32)'L') << 0);
 
 
 //////////////
 //   SPPP   //
 //////////////
 
+#define KEYS_AMOUNT 88           // Amount of keys on the piano
+#define STARTING_KEY PIANO_KEY_A // Lowest key on the piano we use
+#define MAX_KEYS_AT_ONCE 10      // The maximum amount of keys to play at once
+#define FULL_OCTAVES_AMOUNT ((88 - (PIANO_KEY_AMOUNT - STARTING_KEY))/PIANO_KEY_AMOUNT) // Amount of full octaves (containing all 12 keys) on our piano
+#define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
+#define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
 #define BAUD_RATE 9600UL // 230400UL
 #define CMDS_LIST_LEN (500 / ENCODED_MUSIC_CHUNK_LEN)
-#define MAX_CLIENT_MSG_SIZE (12 + MAX_CHUNKS_AMOUNT)
+#define MAX_CLIENT_MSG_SIZE (16 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_MUSIC_CHUNK_LEN)
 #define MAX_SERVER_MSG_SIZE 12
 
-u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8) | (((u32)'P') << 0);
+static const CONST_VAR u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8) | (((u32)'P') << 0);
 
 typedef enum ClientMsgType {
-  MSG_NONE = 0, // If no message came in
-  MSG_PING = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'N') << 8) | (((u32)'G') << 0),
-  MSG_PIDI = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0),
-  MSG_STOP = (((u32)'S') << 24) | (((u32)'T') << 16) | (((u32)'O') << 8) | (((u32)'P') << 0),
-  MSG_CONT = (((u32)'C') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'T') << 0),
-  MSG_LOUD = (((u32)'L') << 24) | (((u32)'O') << 16) | (((u32)'U') << 8) | (((u32)'D') << 0),
-  MSG_SPED = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'E') << 8) | (((u32)'D') << 0),
+    CMSG_NONE = 0, // If no message came in
+    CMSG_PING = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'N') << 8) | (((u32)'G') << 0),
+    CMSG_PIDI = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0),
+    CMSG_STOP = (((u32)'S') << 24) | (((u32)'T') << 16) | (((u32)'O') << 8) | (((u32)'P') << 0),
+    CMSG_CONT = (((u32)'C') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'T') << 0),
+    CMSG_LOUD = (((u32)'L') << 24) | (((u32)'O') << 16) | (((u32)'U') << 8) | (((u32)'D') << 0),
+    CMSG_SPED = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'E') << 8) | (((u32)'D') << 0),
 } ClientMsgType;
 
 typedef enum ServerMsgType {
-  MSG_PONG = (((u32)'P') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'G') << 0),
-  MSG_SUCC = (((u32)'S') << 24) | (((u32)'U') << 16) | (((u32)'C') << 8) | (((u32)'C') << 0),
+    SMSG_NONE = 0,
+    SMSG_REQP = (((u32)'R') << 24) | (((u32)'E') << 16) | (((u32)'Q') << 8) | (((u32)'P') << 0),
+    SMSG_PONG = (((u32)'P') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'G') << 0),
+    SMSG_SUCC = (((u32)'S') << 24) | (((u32)'U') << 16) | (((u32)'C') << 8) | (((u32)'C') << 0),
 } ServerMsgType;
 
+typedef struct ClientMsgPidiData {
+    u64 time;
+    u64 cmds_count;
+    PidiCmd *cmds;
+    u32 idx;
+    u8 *piano;
+} ClientMsgPidiData;
+
 typedef struct ClientMsg {
-  ClientMsgType type;
-  u64 n; // Dependingon the message type, this is either the time or the length of the cmds array
-  PidiCmd *cmds;
+    ClientMsgType type;
+    union {
+        f32 f;
+        ClientMsgPidiData pidi;
+    } data;
 } ClientMsg;
+
+static inline u8 get_key(PidiCmd cmd)
+{
+    i16 key = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)cmd.octave + (i16)cmd.key;
+    if (key < 0) key = (cmd.key < STARTING_KEY)*(PIANO_KEY_AMOUNT) + cmd.key - STARTING_KEY;
+    else key = KEYS_AMOUNT + cmd.key - LAST_OCTAVE_LEN - (cmd.key >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
+    AIL_ASSERT(key >= 0);
+    AIL_ASSERT(key < KEYS_AMOUNT);
+    AIL_STATIC_ASSERT(KEYS_AMOUNT <= UINT8_MAX);
+    return (u8) key;
+}
+
+static inline void apply_pidi_cmd(u8 piano[KEYS_AMOUNT], PidiCmd *cmds, u32 idx, u32 len, u8 *active_keys_count)
+{
+    PidiCmd cmd = cmds[idx];
+    u8 key = get_key(cmd);
+    if      ( cmd.on && !piano[key]) *active_keys_count += 1;
+    else if (!cmd.on &&  piano[key]) *active_keys_count -= 1;
+    piano[key] = cmd.velocity;
+
+    // Prevention-Strategy for exceeding MAX_KEYS_AT_ONCE:
+    // Find the next key that would end playing and turn it off already now
+    // If no such key can be found (which shouldn't actually happen),
+    // then we turn the current key off again
+    if (AIL_UNLIKELY(*active_keys_count >= MAX_KEYS_AT_ONCE)) {
+        while (++idx < len) {
+            u8 k = get_key(cmds[idx]);
+            if (!cmds[idx].on && piano[k]) {
+                piano[k] = 0;
+                return;
+            }
+        }
+        piano[key] = 0;
+    }
+}
 
 #endif // COMMON_H_
