@@ -54,6 +54,10 @@ SOFTWARE.
 #endif // AIL_DEF_INLINE
 #endif // AIL_GUI_DEF_INLINE
 
+#ifndef AIL_GUI_SET_CURSOR
+#define AIL_GUI_SET_CURSOR(c) SetMouseCursor(c)
+#endif
+
 typedef enum {
     AIL_GUI_STATE_HIDDEN,   // Element is not displayed
     AIL_GUI_STATE_INACTIVE, // Element is not active in any way. `state > AIL_GUI_STATE_INACTIVE` can be used to check if the element is active in anyway
@@ -452,7 +456,13 @@ AIL_GUI_DEF void ail_gui_drawPreparedTextOuterBounds(AIL_Gui_Drawable_Text text,
 AIL_GUI_DEF void ail_gui_drawBounds(RL_Rectangle bounds, AIL_Gui_Style style)
 {
     if (style.border_width > 0) {
-        DrawRectangle(bounds.x - style.border_width, bounds.y - style.border_width, bounds.width + 2*style.border_width, bounds.height + 2*style.border_width, style.border_color);
+        RL_Rectangle border = {
+            .x = bounds.x - style.border_width,
+            .y = bounds.y - style.border_width,
+            .width  = bounds.width + 2*style.border_width,
+            .height = bounds.height + 2*style.border_width,
+        };
+        DrawRectangleLinesEx(border, style.border_width, style.border_color);
     }
     DrawRectangle(bounds.x, bounds.y, bounds.width, bounds.height, style.bg);
 }
@@ -468,7 +478,7 @@ AIL_GUI_DEF void ail_gui_drawBoundsOuterBounds(RL_Rectangle inner, RL_Rectangle 
         f32 q1y = AIL_MAX(inner.y - style.border_width, outer.y);
         f32 q2x = AIL_MIN(inner.x + style.border_width + inner.width, outer.x + outer.width);
         f32 q2y = AIL_MIN(inner.y + style.border_width + inner.height, outer.y + outer.height);
-        DrawRectangle(q1x, q1y, q2x - q1x, q2y - q1y, style.border_color);
+        DrawRectangleLinesEx((RL_Rectangle){ q1x, q1y, q2x - q1x, q2y - q1y }, style.border_width, style.border_color);
     }
     DrawRectangle(p1x, p1y, p2x - p1x, p2y - p1y, style.bg);
 }
@@ -513,7 +523,13 @@ AIL_GUI_DEF RL_Vector2* ail_gui_drawSizedEx(AIL_Gui_Drawable_Text text, RL_Recta
 {
     // @Cleanup: Almost identical code to ail_gui_drawPreparedText
     if (style.border_width > 0) {
-        DrawRectangle(bounds.x - style.border_width, bounds.y - style.border_width, bounds.width + 2*style.border_width, bounds.height + 2*style.border_width, style.border_color);
+        RL_Rectangle border = {
+            .x = bounds.x - style.border_width,
+            .y = bounds.y - style.border_width,
+            .width  = bounds.width + 2*style.border_width,
+            .height = bounds.height + 2*style.border_width,
+        };
+        DrawRectangleLinesEx(border, style.border_width, style.border_color);
     }
     DrawRectangle(bounds.x, bounds.y, bounds.width, bounds.height, style.bg);
 
@@ -621,7 +637,7 @@ AIL_GUI_DEF AIL_Gui_State ail_gui_drawLabel(AIL_Gui_Label self)
     AIL_Gui_Drawable_Text prepText = ail_gui_prepTextForDrawing(self.text.data, self.bounds, style);
     ail_gui_drawPreparedSized(prepText, self.bounds, style);
     ail_gui_free_drawable_text(&prepText);
-    if (hovered) SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
+    if (hovered) AIL_GUI_SET_CURSOR(MOUSE_CURSOR_POINTING_HAND);
     return state;
 }
 
@@ -635,7 +651,7 @@ AIL_GUI_DEF AIL_Gui_State ail_gui_drawLabelOuterBounds(AIL_Gui_Label self, RL_Re
     AIL_Gui_Drawable_Text prepText = ail_gui_prepTextForDrawing(self.text.data, self.bounds, style);
     ail_gui_drawPreparedSizedOuterBounds(prepText, self.bounds, outer_bounds, style);
     ail_gui_free_drawable_text(&prepText);
-    if (hovered) SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
+    if (hovered) AIL_GUI_SET_CURSOR(MOUSE_CURSOR_POINTING_HAND);
     return state;
 }
 
@@ -853,7 +869,7 @@ AIL_GUI_DEF AIL_Gui_Update_Res ail_gui_drawInputBox(AIL_Gui_Input_Box *self)
 
     ail_gui_free_drawable_text(&prepText);
     ail_gui_allocator.free_one(ail_gui_allocator.data, coords);
-    if (hovered) SetMouseCursor(MOUSE_CURSOR_IBEAM);
+    if (hovered) AIL_GUI_SET_CURSOR(MOUSE_CURSOR_IBEAM);
     res.state = state;
     return res;
 }
