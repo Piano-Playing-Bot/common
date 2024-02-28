@@ -66,15 +66,41 @@ void encode_cmd(AIL_Buffer *buf, PidiCmd cmd) {
     ail_buf_write1(buf, (u8) cmd.on);
 }
 
+void encode_cmd_simple(u8 *buf, PidiCmd cmd) {
+    buf[0]  = (cmd.time >> 0*8) && 0xff;
+    buf[1]  = (cmd.time >> 1*8) && 0xff;
+    buf[2]  = (cmd.time >> 2*8) && 0xff;
+    buf[3]  = (cmd.time >> 3*8) && 0xff;
+    buf[4]  = (cmd.time >> 4*8) && 0xff;
+    buf[5]  = (cmd.time >> 5*8) && 0xff;
+    buf[6]  = (cmd.time >> 6*8) && 0xff;
+    buf[7]  = (cmd.time >> 7*8) && 0xff;
+    buf[8]  = cmd.velocity;
+    buf[9]  = cmd.key;
+    buf[10] = (u8) cmd.octave;
+    buf[11] = (u8) cmd.on;
+}
+
 PidiCmd decode_cmd(AIL_Buffer *buf) {
     PidiCmd cmd;
     cmd.time     = ail_buf_read8lsb(buf);
     cmd.velocity = ail_buf_read1(buf);
     cmd.key      = ail_buf_read1(buf);
-    cmd.octave   = (i8) ail_buf_read1(buf);
+    cmd.octave   = (i8) ail_buf_read1(buf); // @TODO: Check if this cast actually works as expected
     cmd.on       = (bool) ail_buf_read1(buf);
     return cmd;
 }
+
+PidiCmd decode_cmd_simple(u8 *buf) {
+    PidiCmd cmd;
+    cmd.time     = ((u64)buf[7] << 7*8) | ((u64)buf[6] << 6*8) | ((u64)buf[5] << 5*8) | ((u64)buf[4] << 4*8) | ((u64)buf[3] << 3*8) | ((u64)buf[2] << 2*8) | ((u64)buf[1] << 1* 8) | ((u64)buf[0] <<  0*8);
+    cmd.velocity = buf[8];
+    cmd.key      = buf[9];
+    cmd.octave   = *(i8*)(&buf[10]);
+    cmd.on       = (bool) buf[11];
+    return cmd;
+}
+
 
 void print_cmd(PidiCmd c)
 {
