@@ -44,7 +44,7 @@ typedef enum {
     PIANO_KEY_AMOUNT,
 } PianoKey;
 
-#define MAX_VELOCITY UINT16_MAX
+#define MAX_VELOCITY UINT8_MAX
 // @Memory: Having a chunk struct for each on/off is useful for a simple implementation & translation from MIDI, but increases memory requirements by double
 // Alternative approach would encode the length for playing the chunk
 // A MusicChunk represents whether a note should be played or stopped being played, the time at which this should happen, how long the transition from not-playing to playing (or vice versa) should take and which note exactly should be played
