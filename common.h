@@ -137,13 +137,15 @@ static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) 
 //   SPPP   //
 //////////////
 
+#define BAUD_RATE 9600UL // 230400UL
+#define MSG_TIMEOUT 2000 // timeout for reading messages in milliseconds
+
 #define KEYS_AMOUNT 88           // Amount of keys on the piano
 #define STARTING_KEY PIANO_KEY_A // Lowest key on the piano we use
 #define MAX_KEYS_AT_ONCE 10      // The maximum amount of keys to play at once
 #define FULL_OCTAVES_AMOUNT ((88 - (PIANO_KEY_AMOUNT - STARTING_KEY))/PIANO_KEY_AMOUNT) // Amount of full octaves (containing all 12 keys) on our piano
 #define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
 #define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
-#define BAUD_RATE 9600UL // 230400UL
 #define CMDS_LIST_LEN (500 / ENCODED_MUSIC_CHUNK_LEN)
 #define MAX_CLIENT_MSG_SIZE (16 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_MUSIC_CHUNK_LEN)
 #define MAX_SERVER_MSG_SIZE 12
