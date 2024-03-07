@@ -189,7 +189,7 @@ static inline u8 get_key(PidiCmd cmd)
 {
     i16 key = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)cmd.octave + (i16)cmd.key;
     if (key < 0) key = (cmd.key < STARTING_KEY)*(PIANO_KEY_AMOUNT) + cmd.key - STARTING_KEY;
-    else key = KEYS_AMOUNT + cmd.key - LAST_OCTAVE_LEN - (cmd.key >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
+    else if (key >= KEYS_AMOUNT) key = KEYS_AMOUNT + cmd.key - LAST_OCTAVE_LEN - (cmd.key >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
     AIL_ASSERT(key >= 0);
     AIL_ASSERT(key < KEYS_AMOUNT);
     AIL_STATIC_ASSERT(KEYS_AMOUNT <= UINT8_MAX);
