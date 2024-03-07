@@ -55,8 +55,7 @@ typedef struct {
 } PidiCmd;
 AIL_DA_INIT(PidiCmd);
 
-// @TODO: Rename into ENCODED_CMD_LEN
-#define ENCODED_MUSIC_CHUNK_LEN 13
+#define ENCODED_CMD_LEN 13
 
 void encode_cmd(AIL_Buffer *buf, PidiCmd cmd) {
     ail_buf_write8lsb(buf, cmd.time);
@@ -146,8 +145,8 @@ static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) 
 #define FULL_OCTAVES_AMOUNT ((88 - (PIANO_KEY_AMOUNT - STARTING_KEY))/PIANO_KEY_AMOUNT) // Amount of full octaves (containing all 12 keys) on our piano
 #define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
 #define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
-#define CMDS_LIST_LEN (500 / ENCODED_MUSIC_CHUNK_LEN)
-#define MAX_CLIENT_MSG_SIZE (16 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_MUSIC_CHUNK_LEN)
+#define CMDS_LIST_LEN (500 / sizeof(PidiCmd))
+#define MAX_CLIENT_MSG_SIZE (16 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
 #define MAX_SERVER_MSG_SIZE 12
 
 static const CONST_VAR u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8) | (((u32)'P') << 0);
