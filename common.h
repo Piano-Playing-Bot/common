@@ -146,7 +146,7 @@ static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) 
 #define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
 #define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
 #define CMDS_LIST_LEN (300 / sizeof(PidiCmd))
-#define MAX_CLIENT_MSG_SIZE (16 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
+#define MAX_CLIENT_MSG_SIZE (24 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
 #define MAX_SERVER_MSG_SIZE 12
 
 static const CONST_VAR u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8) | (((u32)'P') << 0);
