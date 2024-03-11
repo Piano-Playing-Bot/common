@@ -55,7 +55,7 @@ typedef struct {
 } PidiCmd;
 AIL_DA_INIT(PidiCmd);
 
-#define ENCODED_CMD_LEN 13
+#define ENCODED_CMD_LEN 12
 
 void encode_cmd(AIL_Buffer *buf, PidiCmd cmd) {
     ail_buf_write8lsb(buf, cmd.time);
@@ -78,6 +78,7 @@ void encode_cmd_simple(u8 *buf, PidiCmd cmd) {
     buf[9]  = cmd.key;
     buf[10] = (u8) cmd.octave;
     buf[11] = (u8) cmd.on;
+    AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 12);
 }
 
 PidiCmd decode_cmd(AIL_Buffer *buf) {
@@ -146,7 +147,7 @@ static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) 
 #define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
 #define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
 #define CMDS_LIST_LEN (300 / sizeof(PidiCmd))
-#define MAX_CLIENT_MSG_SIZE (24 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
+#define MAX_CLIENT_MSG_SIZE (16 + 12 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
 #define MAX_SERVER_MSG_SIZE 12
 
 static const CONST_VAR u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8) | (((u32)'P') << 0);
@@ -201,7 +202,7 @@ static inline void apply_pidi_cmd(u8 piano[KEYS_AMOUNT], PidiCmd *cmds, u32 idx,
     u8 key = get_key(cmd);
     if      ( cmd.on && !piano[key]) *active_keys_count += 1;
     else if (!cmd.on &&  piano[key]) *active_keys_count -= 1;
-    piano[key] = cmd.velocity;
+    piano[key] = cmd.on*cmd.velocity;
 
     // Prevention-Strategy for exceeding MAX_KEYS_AT_ONCE:
     // Find the next key that would end playing and turn it off already now

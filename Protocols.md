@@ -52,7 +52,7 @@ All commands are written here one after another. The amount of commands is given
 Every command follows the following format.
 
 ```
-<Time: 8 bytes> <Velocity: 2 bytes> <Key: 1 byte> <Octave: 1 byte> <On: 1 byte>
+<Time: 8 bytes> <Velocity: 1 byte> <Key: 1 byte> <Octave: 1 byte> <On: 1 byte>
 ```
 
 - **Time:**
