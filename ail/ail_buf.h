@@ -341,7 +341,7 @@ AIL_BUF_DEF char *ail_buf_readcstr(AIL_Buffer *buf)
 
 AIL_BUF_DEF void ail_buf_write1(AIL_Buffer *buf, u8  val)
 {
-	ail_buf_ensure_size(buf, 2);
+	ail_buf_ensure_size(buf, 1);
 	buf->data[buf->idx++] = val;
 	if (AIL_LIKELY(buf->idx > buf->len)) buf->len = buf->idx;
 }
