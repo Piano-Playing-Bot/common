@@ -148,7 +148,7 @@ When talking about either the client or the server, the term 'node' may also be 
 Any message between the server and client has the following format:
 
 ```
-<Magic Bytes: 4 bytes> <Message-Type: 4 bytes> <Size: 8 bytes> <Message: Size bytes>
+<Magic Bytes: 4 bytes> <Message-Type: 4 bytes> <Size: 4 bytes> <Message: Size bytes>
 ```
 
 Unless otherwise specified, small-endian encoding is used.
@@ -160,7 +160,7 @@ The protocol's Magic bytes are: `SPPP`. It is always written in big-endian forma
 The different types of messages that exist, are listed below under `Message`. Each message type has its own 4 character signature, by which it is defined. Should a node not recognize the provided message type, it should read the amount of given bytes and skip the message. Version upgrades should easily stay backward-compatible that way.
 
 - **Size:**
-The size of the message is given as an unsigned 64-bit number. This size does not include the 8 bytes of the size or the 8 bytes that came before the size.
+The size of the message is given as an unsigned 32-bit number. This size does not include the 4 bytes of the size or the 8 bytes that come before the size.
 
 - **Message:**
 There are exactly as many bytes for the message as given in `Size`. How to interpret the message depends on the `Message-Type`. The message's format for each possible type is given below.
