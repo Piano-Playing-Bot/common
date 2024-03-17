@@ -174,7 +174,7 @@ typedef struct ClientMsgPidiData {
     u32 cmds_count;
     PidiCmd *cmds;
     u32 idx;
-    u8 *piano;
+    const u8 *piano;
 } ClientMsgPidiData;
 
 typedef struct ClientMsg {
