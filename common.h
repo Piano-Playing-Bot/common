@@ -42,70 +42,53 @@ typedef enum {
     PIANO_KEY_AMOUNT,
 } PianoKey;
 
-#define MAX_VELOCITY UINT8_MAX
 // @Memory: Having a cmd struct for each on/off is useful for a simple implementation & translation from MIDI, but increases memory requirements by double
 // Alternative approach would encode the length for playing the cmd
 // A PidiCmd represents whether a note should be played or stopped being played, the time at which this should happen and which specific key on the piano this command refers to
 typedef struct {
-    u64  time;     // The millisecond after song-start on which to start playing this note
-    u8   velocity; // The strength with which the note should be played
-    i8   octave;   // Which octave the key should be played on (zero is the middle octave)
-    bool on;       // Whether the note should be played (true) or not (false)
-    PianoKey key;  // The note's key
+    u16 dt       : 12; // Time in ms since previous command
+    u8  velocity : 4;  // Strength with which the note should be pressed (0 means, the note will not be played)
+    u8  len      : 8;  // Length in 10ms for which the note should be played
+    i8  octave   : 4;  // The octave of the note (between -8 and 7)
+    PianoKey key : 4;  // The key of the note
 } PidiCmd;
 AIL_DA_INIT(PidiCmd);
+#define MAX_VELOCITY 1<<4
+#define LEN_FACTOR 10 // Factor by which to multiply a PidiCmd's `len` with, to get the length in ms
+#define ENCODED_CMD_LEN 4
+// AIL_STATIC_ASSERT(ENCODED_CMD_LEN == sizeof(PidiCmd));
 
-#define ENCODED_CMD_LEN 12
-
-void encode_cmd(AIL_Buffer *buf, PidiCmd cmd) {
-    ail_buf_write8lsb(buf, cmd.time);
-    ail_buf_write1(buf, cmd.velocity);
-    ail_buf_write1(buf, cmd.key);
-    ail_buf_write1(buf, (u8) cmd.octave);
-    ail_buf_write1(buf, (u8) cmd.on);
+static inline void encode_cmd(AIL_Buffer *buf, PidiCmd cmd) {
+    AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 4);
+    ail_buf_write4lsb(buf, *(u32 *)&cmd);
 }
 
-void encode_cmd_simple(u8 *buf, PidiCmd cmd) {
-    buf[0]  = (cmd.time >> 0*8) && 0xff;
-    buf[1]  = (cmd.time >> 1*8) && 0xff;
-    buf[2]  = (cmd.time >> 2*8) && 0xff;
-    buf[3]  = (cmd.time >> 3*8) && 0xff;
-    buf[4]  = (cmd.time >> 4*8) && 0xff;
-    buf[5]  = (cmd.time >> 5*8) && 0xff;
-    buf[6]  = (cmd.time >> 6*8) && 0xff;
-    buf[7]  = (cmd.time >> 7*8) && 0xff;
-    buf[8]  = cmd.velocity;
-    buf[9]  = cmd.key;
-    buf[10] = (u8) cmd.octave;
-    buf[11] = (u8) cmd.on;
-    AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 12);
+static inline void encode_cmd_simple(u8 *buf, PidiCmd cmd) {
+    AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 4);
+    u32 c = *(u32 *)&cmd;
+    buf[0]  = (c >> 0*8) && 0xff;
+    buf[1]  = (c >> 1*8) && 0xff;
+    buf[2]  = (c >> 2*8) && 0xff;
+    buf[3]  = (c >> 3*8) && 0xff;
 }
 
-PidiCmd decode_cmd(AIL_Buffer *buf) {
-    PidiCmd cmd;
-    cmd.time     = ail_buf_read8lsb(buf);
-    cmd.velocity = ail_buf_read1(buf);
-    cmd.key      = ail_buf_read1(buf);
-    cmd.octave   = (i8) ail_buf_read1(buf); // @TODO: Check if this cast actually works as expected
-    cmd.on       = (bool) ail_buf_read1(buf);
-    return cmd;
+static inline PidiCmd decode_cmd(AIL_Buffer *buf) {
+    AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 4);
+    u32 cmd = ail_buf_read4lsb(buf);
+    return *(PidiCmd *)&cmd;
 }
 
 PidiCmd decode_cmd_simple(u8 *buf) {
-    PidiCmd cmd;
-    cmd.time     = ((u64)buf[7] << 7*8) | ((u64)buf[6] << 6*8) | ((u64)buf[5] << 5*8) | ((u64)buf[4] << 4*8) | ((u64)buf[3] << 3*8) | ((u64)buf[2] << 2*8) | ((u64)buf[1] << 1* 8) | ((u64)buf[0] <<  0*8);
-    cmd.velocity = buf[8];
-    cmd.key      = buf[9];
-    cmd.octave   = *(i8*)(&buf[10]);
-    cmd.on       = (bool) buf[11];
-    return cmd;
+    AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 4);
+    u32 cmd = ((u64)buf[3] << 3*8) | ((u64)buf[2] << 2*8) | ((u64)buf[1] << 1* 8) | ((u64)buf[0] <<  0*8);
+    return *(PidiCmd *)&cmd;
 }
 
 
 void print_cmd(PidiCmd c)
 {
     static const char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    DBG_LOG("{ key: %2s, octave: %2d, on: %c, time: %lld, velocity: %d }\n", key_strs[c.key], c.octave, c.on ? 'y' : 'n', c.time, c.velocity);
+    DBG_LOG("{ key: %2s, octave: %2d, dt: %d, velocity: %d }\n", key_strs[c.key], c.octave, c.dt, c.velocity);
 }
 
 typedef struct {
@@ -170,7 +153,7 @@ typedef enum ServerMsgType {
 } ServerMsgType;
 
 typedef struct ClientMsgPidiData {
-    u64 time;
+    u32 time;
     u32 cmds_count;
     PidiCmd *cmds;
     u32 idx;
@@ -185,6 +168,20 @@ typedef struct ClientMsg {
     } data;
 } ClientMsg;
 
+typedef struct PlayedKey {
+    u8  len;  // time in ms*LEN_FACTOR for which the note should still be played
+    u8  idx;  // index of the note in the `piano` array.
+} PlayedKey;
+AIL_STATIC_ASSERT(KEYS_AMOUNT < UINT8_MAX);
+
+typedef struct PlayedKeyList {
+    u32 start_time; // time in ms to which counting the all PlayedKeys lengths is relative to
+    u8  count;      // amount of currently played keys
+    PlayedKey keys[MAX_KEYS_AT_ONCE];
+} PlayedKeyList;
+AIL_STATIC_ASSERT(MAX_KEYS_AT_ONCE < UINT8_MAX);
+
+
 static inline u8 get_key(PidiCmd cmd)
 {
     i16 key = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)cmd.octave + (i16)cmd.key;
@@ -196,27 +193,49 @@ static inline u8 get_key(PidiCmd cmd)
     return (u8) key;
 }
 
-static inline void apply_pidi_cmd(u8 piano[KEYS_AMOUNT], PidiCmd *cmds, u32 idx, u32 len, u8 *active_keys_count)
-{
-    PidiCmd cmd = cmds[idx];
-    u8 key = get_key(cmd);
-    if      ( cmd.on && !piano[key]) *active_keys_count += 1;
-    else if (!cmd.on &&  piano[key]) *active_keys_count -= 1;
-    piano[key] = cmd.on*cmd.velocity;
+#define ARR_UNORDERED_RM(arr, idx, len) (arr)[(idx)] = (arr)[--(len)]
 
-    // Prevention-Strategy for exceeding MAX_KEYS_AT_ONCE:
-    // Find the next key that would end playing and turn it off already now
-    // If no such key can be found (which shouldn't actually happen),
-    // then we turn the current key off again
-    if (AIL_UNLIKELY(*active_keys_count >= MAX_KEYS_AT_ONCE)) {
-        while (++idx < len) {
-            u8 k = get_key(cmds[idx]);
-            if (!cmds[idx].on && piano[k]) {
-                piano[k] = 0;
-                return;
-            }
+static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
+{
+    u8 idx = get_key(cmd);
+    piano[idx] = cmd.velocity;
+
+    i8 played_idx = -1;
+    u8 next_off_key_idx = 0;
+    u8 time_offset = cur_time - played_keys->start_time;
+    played_keys->start_time = cur_time;
+    for (u8 i = 0; i < played_keys->count; i++) {
+        if (played_keys->keys[i].len < time_offset) {
+            ARR_UNORDERED_RM(played_keys, i, played_keys->count);
+            i--;
+            continue;
         }
-        piano[key] = 0;
+        played_keys->keys[i].len -= time_offset;
+        if (played_keys->keys[i].idx == idx) {
+            played_idx = i;
+        }
+        if (played_keys->keys[i].len < played_keys->keys[next_off_key_idx].len) {
+            next_off_key_idx = i;
+        }
+    }
+
+    if (cmd.velocity) {
+        if (played_idx < 0) {
+            if (played_keys->count == MAX_KEYS_AT_ONCE) {
+                piano[played_keys->keys[next_off_key_idx].idx] = 0;
+                played_idx = next_off_key_idx;
+            } else {
+                played_idx = played_keys->count++;
+            }
+            played_keys->keys[played_idx] = (PlayedKey) {
+                .idx  = idx,
+                .len  = cmd.len,
+            };
+        } else {
+            played_keys->keys[played_idx].len = cmd.len;
+        }
+    } else if (played_idx >= 0) {
+        ARR_UNORDERED_RM(played_keys->keys, played_idx, played_keys->count);
     }
 }
 
