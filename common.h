@@ -88,7 +88,7 @@ PidiCmd decode_cmd_simple(u8 *buf) {
 void print_cmd(PidiCmd c)
 {
     static const char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    DBG_LOG("{ key: %2s, octave: %2d, dt: %d, velocity: %d }\n", key_strs[c.key], c.octave, c.dt, c.velocity);
+    DBG_LOG("{ key: %2s, octave: %2d, dt: %d, len: %d, velocity: %d }\n", key_strs[c.key], c.octave, c.dt, c.len*LEN_FACTOR, c.velocity);
 }
 
 typedef struct {
