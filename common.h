@@ -227,10 +227,8 @@ static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUN
             } else {
                 played_idx = played_keys->count++;
             }
-            played_keys->keys[played_idx] = (PlayedKey) {
-                .idx  = idx,
-                .len  = cmd.len,
-            };
+            played_keys->keys[played_idx].idx = idx;
+            played_keys->keys[played_idx].len = cmd.len;
         } else {
             played_keys->keys[played_idx].len = cmd.len;
         }
