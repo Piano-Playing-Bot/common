@@ -48,7 +48,7 @@ typedef enum {
 typedef struct {
     u16 dt       : 12; // Time in ms since previous command
     u8  velocity : 4;  // Strength with which the note should be pressed (0 means, the note will not be played)
-    u8  len      : 8;  // Length in 10ms for which the note should be played
+    u8  len      : 8;  // Length in centiseconds (1cs = 10ms) for which the note should be played
     i8  octave   : 4;  // The octave of the note (between -8 and 7)
     PianoKey key : 4;  // The key of the note
 } PidiCmd;
@@ -88,7 +88,7 @@ PidiCmd decode_cmd_simple(u8 *buf) {
 void print_cmd(PidiCmd c)
 {
     static const char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    DBG_LOG("{ key: %2s, octave: %2d, dt: %d, len: %d, velocity: %d }\n", key_strs[c.key], c.octave, c.dt, c.len*LEN_FACTOR, c.velocity);
+    DBG_LOG("{ key: %2s, octave: %2d, dt: %dms, len: %dms, velocity: %d }\n", key_strs[c.key], c.octave, c.dt, c.len*LEN_FACTOR, c.velocity);
 }
 
 typedef struct {
@@ -205,12 +205,12 @@ static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUN
     u8 time_offset = cur_time - played_keys->start_time;
     played_keys->start_time = cur_time;
     for (u8 i = 0; i < played_keys->count; i++) {
-        if (played_keys->keys[i].len < time_offset) {
+        if (played_keys->keys[i].len*LEN_FACTOR < time_offset) {
             ARR_UNORDERED_RM(played_keys, i, played_keys->count);
             i--;
             continue;
         }
-        played_keys->keys[i].len -= time_offset;
+        played_keys->keys[i].len -= time_offset/LEN_FACTOR;
         if (played_keys->keys[i].idx == idx) {
             played_idx = i;
         }
