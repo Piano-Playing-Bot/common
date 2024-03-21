@@ -32,11 +32,11 @@ All commands are written here one after another. The amount of commands is given
 Every command is encoded as a 32-bit number. The following shows the bit field that makes up these 32 bits:
 
 ```c
-delta time : 12
-velocity   : 4
-length     : 8
-octave     : 4
-key        : 4
+delta time : 12 bits
+velocity   : 4  bits
+length     : 8  bits
+octave     : 4  bits
+key        : 4  bits
 ```
 
 - **delta time:**
