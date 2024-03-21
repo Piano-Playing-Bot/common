@@ -45,26 +45,53 @@ typedef enum {
 // @Memory: Having a cmd struct for each on/off is useful for a simple implementation & translation from MIDI, but increases memory requirements by double
 // Alternative approach would encode the length for playing the cmd
 // A PidiCmd represents whether a note should be played or stopped being played, the time at which this should happen and which specific key on the piano this command refers to
-typedef struct {
-    u16 dt       : 12; // Time in ms since previous command
-    u8  velocity : 4;  // Strength with which the note should be pressed (0 means, the note will not be played)
-    u8  len      : 8;  // Length in centiseconds (1cs = 10ms) for which the note should be played
-    i8  octave   : 4;  // The octave of the note (between -8 and 7)
-    PianoKey key : 4;  // The key of the note
+typedef struct PidiCmd {
+    u32 dt   : 12, // Time in ms since previous command
+    velocity : 4,  // Strength with which the note should be pressed (0 means, the note will not be played)
+    len      : 8,  // Length in centiseconds (1cs = 10ms) for which the note should be played
+    octave   : 4,  // The octave of the note (between -8 and 7)
+    key      : 4;  // The key of the note
 } PidiCmd;
 AIL_DA_INIT(PidiCmd);
 #define MAX_VELOCITY 1<<4
 #define LEN_FACTOR 10 // Factor by which to multiply a PidiCmd's `len` with, to get the length in ms
 #define ENCODED_CMD_LEN 4
-// AIL_STATIC_ASSERT(ENCODED_CMD_LEN == sizeof(PidiCmd));
+AIL_STATIC_ASSERT(ENCODED_CMD_LEN == sizeof(PidiCmd));
+
+static inline u16 pidi_dt(PidiCmd cmd)
+{
+    return (u16)cmd.dt;
+}
+
+static inline u8 pidi_velocity(PidiCmd cmd)
+{
+    return (u8)cmd.velocity;
+}
+
+static inline u8 pidi_len(PidiCmd cmd)
+{
+    return (u8)cmd.len;
+}
+
+static inline i8 pidi_octave(PidiCmd cmd)
+{
+    return (i8)(0xf0 | cmd.octave);
+}
+
+static inline PianoKey pidi_key(PidiCmd cmd)
+{
+    return (PianoKey)cmd.key;
+}
 
 static inline void encode_cmd(AIL_Buffer *buf, PidiCmd cmd) {
     AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 4);
+    AIL_STATIC_ASSERT(sizeof(PidiCmd) == 4);
     ail_buf_write4lsb(buf, *(u32 *)&cmd);
 }
 
 static inline void encode_cmd_simple(u8 *buf, PidiCmd cmd) {
     AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 4);
+    AIL_STATIC_ASSERT(sizeof(PidiCmd) == 4);
     u32 c = *(u32 *)&cmd;
     buf[0]  = (c >> 0*8) && 0xff;
     buf[1]  = (c >> 1*8) && 0xff;
@@ -74,12 +101,14 @@ static inline void encode_cmd_simple(u8 *buf, PidiCmd cmd) {
 
 static inline PidiCmd decode_cmd(AIL_Buffer *buf) {
     AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 4);
+    AIL_STATIC_ASSERT(sizeof(PidiCmd) == 4);
     u32 cmd = ail_buf_read4lsb(buf);
     return *(PidiCmd *)&cmd;
 }
 
 PidiCmd decode_cmd_simple(u8 *buf) {
     AIL_STATIC_ASSERT(ENCODED_CMD_LEN == 4);
+    AIL_STATIC_ASSERT(sizeof(PidiCmd) == 4);
     u32 cmd = ((u64)buf[3] << 3*8) | ((u64)buf[2] << 2*8) | ((u64)buf[1] << 1* 8) | ((u64)buf[0] <<  0*8);
     return *(PidiCmd *)&cmd;
 }
@@ -88,7 +117,7 @@ PidiCmd decode_cmd_simple(u8 *buf) {
 void print_cmd(PidiCmd c)
 {
     static const char *key_strs[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    DBG_LOG("{ key: %2s, octave: %2d, dt: %dms, len: %dms, velocity: %d }\n", key_strs[c.key], c.octave, c.dt, c.len*LEN_FACTOR, c.velocity);
+    DBG_LOG("{ key: %2s, octave: %2d, dt: %dms, len: %dms, velocity: %d }\n", key_strs[pidi_key(c)], pidi_octave(c), pidi_dt(c), pidi_len(c)*LEN_FACTOR, pidi_velocity(c));
 }
 
 typedef struct {
@@ -100,7 +129,7 @@ AIL_DA_INIT(Song);
 
 void print_song(Song song)
 {
-    DBG_LOG("{\n  name: %s\n  len: %lldms\n  cmds: [\n", song.name, song.len);
+    DBG_LOG("{\n  name: %s\n  len: %lldms\n  cmds (%d): [\n", song.name, song.len, song.cmds.len);
     for (u32 i = 0; i < song.cmds.len; i++) {
         DBG_LOG("  ");
         print_cmd(song.cmds.data[i]);
@@ -182,11 +211,11 @@ typedef struct PlayedKeyList {
 AIL_STATIC_ASSERT(MAX_KEYS_AT_ONCE < UINT8_MAX);
 
 
-static inline u8 get_key(PidiCmd cmd)
+static inline u8 get_piano_idx(PidiCmd cmd)
 {
-    i16 key = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)cmd.octave + (i16)cmd.key;
-    if (key < 0) key = (cmd.key < STARTING_KEY)*(PIANO_KEY_AMOUNT) + cmd.key - STARTING_KEY;
-    else if (key >= KEYS_AMOUNT) key = KEYS_AMOUNT + cmd.key - LAST_OCTAVE_LEN - (cmd.key >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
+    i16 key = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)pidi_octave(cmd) + (i16)pidi_key(cmd);
+    if (key < 0) key = (pidi_key(cmd) < STARTING_KEY)*(PIANO_KEY_AMOUNT) + pidi_key(cmd) - STARTING_KEY;
+    else if (key >= KEYS_AMOUNT) key = KEYS_AMOUNT + pidi_key(cmd) - LAST_OCTAVE_LEN - (pidi_key(cmd) >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
     AIL_ASSERT(key >= 0);
     AIL_ASSERT(key < KEYS_AMOUNT);
     AIL_STATIC_ASSERT(KEYS_AMOUNT <= UINT8_MAX);
@@ -197,8 +226,8 @@ static inline u8 get_key(PidiCmd cmd)
 
 static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
 {
-    u8 idx = get_key(cmd);
-    piano[idx] = cmd.velocity;
+    u8 idx     = get_piano_idx(cmd);
+    piano[idx] = pidi_velocity(cmd);
 
     i8 played_idx = -1;
     u8 next_off_key_idx = 0;
@@ -219,7 +248,7 @@ static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUN
         }
     }
 
-    if (cmd.velocity) {
+    if (pidi_velocity(cmd)) {
         if (played_idx < 0) {
             if (played_keys->count == MAX_KEYS_AT_ONCE) {
                 piano[played_keys->keys[next_off_key_idx].idx] = 0;
@@ -228,9 +257,9 @@ static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUN
                 played_idx = played_keys->count++;
             }
             played_keys->keys[played_idx].idx = idx;
-            played_keys->keys[played_idx].len = cmd.len;
+            played_keys->keys[played_idx].len = pidi_len(cmd);
         } else {
-            played_keys->keys[played_idx].len = cmd.len;
+            played_keys->keys[played_idx].len = pidi_len(cmd);
         }
     } else if (played_idx >= 0) {
         ARR_UNORDERED_RM(played_keys->keys, played_idx, played_keys->count);
