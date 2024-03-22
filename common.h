@@ -75,7 +75,9 @@ static inline u8 pidi_len(PidiCmd cmd)
 
 static inline i8 pidi_octave(PidiCmd cmd)
 {
-    return (i8)(0xf0 | cmd.octave);
+    // Sign extending the 4-bit octave to 8 bit
+    if (cmd.octave & 0x8) return (i8)(0xf0 | cmd.octave);
+    else return cmd.octave;
 }
 
 static inline PianoKey pidi_key(PidiCmd cmd)
