@@ -226,22 +226,30 @@ static inline u8 get_piano_idx(PidiCmd cmd)
 
 #define ARR_UNORDERED_RM(arr, idx, len) (arr)[(idx)] = (arr)[--(len)]
 
-static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
+static inline void update_played_keys(u32 cur_time, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
+{
+    u32 time_offset = cur_time - played_keys->start_time;
+    AIL_ASSERT(cur_time >= played_keys->start_time);
+    played_keys->start_time = cur_time;
+    for (u8 i = 0; i < played_keys->count; i++) {
+        if (played_keys->keys[i].len*LEN_FACTOR <= time_offset) {
+            piano[played_keys->keys[i].idx] = 0;
+            ARR_UNORDERED_RM(played_keys->keys, i, played_keys->count);
+            i--;
+            continue;
+        }
+        played_keys->keys[i].len -= time_offset/LEN_FACTOR;
+    }
+}
+
+static inline void apply_cmd_no_keys_update(PidiCmd cmd, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
 {
     u8 idx     = get_piano_idx(cmd);
     piano[idx] = pidi_velocity(cmd);
 
     i8 played_idx = -1;
     u8 next_off_key_idx = 0;
-    u8 time_offset = cur_time - played_keys->start_time;
-    played_keys->start_time = cur_time;
     for (u8 i = 0; i < played_keys->count; i++) {
-        if (played_keys->keys[i].len*LEN_FACTOR < time_offset) {
-            ARR_UNORDERED_RM(played_keys, i, played_keys->count);
-            i--;
-            continue;
-        }
-        played_keys->keys[i].len -= time_offset/LEN_FACTOR;
         if (played_keys->keys[i].idx == idx) {
             played_idx = i;
         }
@@ -265,7 +273,16 @@ static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUN
         }
     } else if (played_idx >= 0) {
         ARR_UNORDERED_RM(played_keys->keys, played_idx, played_keys->count);
+        piano[idx] = 0;
     }
 }
 
+static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
+{
+    update_played_keys(cur_time, piano, played_keys);
+    apply_cmd_no_keys_update(cmd, piano, played_keys);
+}
+
 #endif // COMMON_H_
+
+\ No newline at end of file
