@@ -31,6 +31,10 @@ SOFTWARE.
 #endif // AIL_TYPES_IMPL
 #include "ail.h"
 
+#ifndef AIL_RING_ASSERT
+#define AIL_RING_ASSERT AIL_ASSERT
+#endif
+
 #ifndef AIL_RING_DEF
 #ifdef  AIL_DEF
 #define AIL_RING_DEF AIL_DEF
@@ -60,32 +64,35 @@ SOFTWARE.
 #define AIL_RING_SIZE 128
 #endif // AIL_RING_SIZE
 
-AIL_STATIC_ASSERT(AIL_RING_SIZE < UINT8_MAX); // @Note: Makes sure that using 'u8' for indexes works
+AIL_STATIC_ASSERT(AIL_RING_SIZE <= 256); // @Note: Makes sure that using 'u8' for indexes works
 typedef struct AIL_RingBuffer {
     u8 start;
     u8 end;
     u8 data[AIL_RING_SIZE];
 } AIL_RingBuffer;
 
-AIL_RING_DEF u8   ail_ring_len     (AIL_RingBuffer rb);
-AIL_RING_DEF void ail_ring_pop     (AIL_RingBuffer *rb);
-AIL_RING_DEF void ail_ring_popn    (AIL_RingBuffer *rb, u8 n);
-AIL_RING_DEF u8   ail_ring_peek    (AIL_RingBuffer rb);
-AIL_RING_DEF u8   ail_ring_peek_at (AIL_RingBuffer rb, u8 offset);
-AIL_RING_DEF u16  ail_ring_peek2msb(AIL_RingBuffer rb);
-AIL_RING_DEF u16  ail_ring_peek2lsb(AIL_RingBuffer rb);
-AIL_RING_DEF u32  ail_ring_peek4msb(AIL_RingBuffer rb);
-AIL_RING_DEF u32  ail_ring_peek4lsb(AIL_RingBuffer rb);
-AIL_RING_DEF u64  ail_ring_peek8msb(AIL_RingBuffer rb);
-AIL_RING_DEF u64  ail_ring_peek8lsb(AIL_RingBuffer rb);
-AIL_RING_DEF void ail_ring_peekn   (AIL_RingBuffer rb, u8 n, u8 *buf);
-AIL_RING_DEF u16  ail_ring_read2msb(AIL_RingBuffer *rb);
-AIL_RING_DEF u16  ail_ring_read2lsb(AIL_RingBuffer *rb);
-AIL_RING_DEF u32  ail_ring_read4msb(AIL_RingBuffer *rb);
-AIL_RING_DEF u32  ail_ring_read4lsb(AIL_RingBuffer *rb);
-AIL_RING_DEF u64  ail_ring_read8msb(AIL_RingBuffer *rb);
-AIL_RING_DEF u64  ail_ring_read8lsb(AIL_RingBuffer *rb);
-AIL_RING_DEF void ail_ring_readn   (AIL_RingBuffer *rb, u8 n, u8 *buf);
+AIL_RING_DEF u8   ail_ring_len      (AIL_RingBuffer  rb);
+AIL_RING_DEF void ail_ring_pop      (AIL_RingBuffer *rb);
+AIL_RING_DEF void ail_ring_popn     (AIL_RingBuffer *rb, u8 n);
+AIL_RING_DEF u8   ail_ring_peek     (AIL_RingBuffer  rb);
+AIL_RING_DEF u8   ail_ring_peek_at  (AIL_RingBuffer  rb, u8 offset);
+AIL_RING_DEF u16  ail_ring_peek2msb (AIL_RingBuffer  rb);
+AIL_RING_DEF u16  ail_ring_peek2lsb (AIL_RingBuffer  rb);
+AIL_RING_DEF u32  ail_ring_peek4msb (AIL_RingBuffer  rb);
+AIL_RING_DEF u32  ail_ring_peek4lsb (AIL_RingBuffer  rb);
+AIL_RING_DEF u64  ail_ring_peek8msb (AIL_RingBuffer  rb);
+AIL_RING_DEF u64  ail_ring_peek8lsb (AIL_RingBuffer  rb);
+AIL_RING_DEF void ail_ring_peekn    (AIL_RingBuffer  rb, u8 n, u8 *buf);
+AIL_RING_DEF u16  ail_ring_read2msb (AIL_RingBuffer *rb);
+AIL_RING_DEF u16  ail_ring_read2lsb (AIL_RingBuffer *rb);
+AIL_RING_DEF u32  ail_ring_read4msb (AIL_RingBuffer *rb);
+AIL_RING_DEF u32  ail_ring_read4lsb (AIL_RingBuffer *rb);
+AIL_RING_DEF u64  ail_ring_read8msb (AIL_RingBuffer *rb);
+AIL_RING_DEF u64  ail_ring_read8lsb (AIL_RingBuffer *rb);
+AIL_RING_DEF void ail_ring_readn    (AIL_RingBuffer *rb, u8 n, u8 *buf);
+AIL_RING_DEF void ail_ring_write_at (AIL_RingBuffer *rb, u8 offset, u8 x); // @Note: Does not modify rb->end
+AIL_RING_DEF void ail_ring_write1   (AIL_RingBuffer *rb, u8 x);
+AIL_RING_DEF void ail_ring_readn    (AIL_RingBuffer *rb, u8 n, u8 *buf);
 AIL_RING_DEF void ail_ring_write2msb(AIL_RingBuffer *rb, u16 x);
 AIL_RING_DEF void ail_ring_write2lsb(AIL_RingBuffer *rb, u16 x);
 AIL_RING_DEF void ail_ring_write4msb(AIL_RingBuffer *rb, u32 x);
@@ -221,61 +228,73 @@ void ail_ring_readn(AIL_RingBuffer *rb, u8 n, u8 *buf)
     ail_ring_popn(rb, n);
 }
 
+void ail_ring_write_at(AIL_RingBuffer *rb, u8 offset, u8 x)
+{
+    rb->data[(rb->end + offset)%AIL_RING_SIZE] = x;
+    AIL_RING_ASSERT((rb->end < rb->start) == (rb->end + offset < rb->start));
+}
+
+void ail_ring_write1(AIL_RingBuffer *rb, u8 x)
+{
+    ail_ring_write_at(rb, 0, x);
+    rb->end = (rb->end + 1)%AIL_RING_SIZE;
+}
+
 void ail_ring_write2msb(AIL_RingBuffer *rb, u16 x)
 {
-    rb->data[(rb->end + 0)%AIL_RING_SIZE] = (u8)(x >> 1*8);
-    rb->data[(rb->end + 1)%AIL_RING_SIZE] = (u8)(x >> 0*8);
+    ail_ring_write_at(rb, 0, (u8)(x >> 1*8));
+    ail_ring_write_at(rb, 1, (u8)(x >> 0*8));
     rb->end = (rb->end + 2)%AIL_RING_SIZE;
 }
 
 void ail_ring_write2lsb(AIL_RingBuffer *rb, u16 x)
 {
-    rb->data[(rb->end + 0)%AIL_RING_SIZE] = (u8)(x >> 0*8);
-    rb->data[(rb->end + 1)%AIL_RING_SIZE] = (u8)(x >> 1*8);
+    ail_ring_write_at(rb, 0, (u8)(x >> 0*8));
+    ail_ring_write_at(rb, 1, (u8)(x >> 1*8));
     rb->end = (rb->end + 2)%AIL_RING_SIZE;
 }
 
 void ail_ring_write4msb(AIL_RingBuffer *rb, u32 x)
 {
-    rb->data[(rb->end + 0)%AIL_RING_SIZE] = (u8)(x >> 3*8);
-    rb->data[(rb->end + 1)%AIL_RING_SIZE] = (u8)(x >> 2*8);
-    rb->data[(rb->end + 2)%AIL_RING_SIZE] = (u8)(x >> 1*8);
-    rb->data[(rb->end + 3)%AIL_RING_SIZE] = (u8)(x >> 0*8);
+    ail_ring_write_at(rb, 0, (u8)(x >> 3*8));
+    ail_ring_write_at(rb, 1, (u8)(x >> 2*8));
+    ail_ring_write_at(rb, 2, (u8)(x >> 1*8));
+    ail_ring_write_at(rb, 3, (u8)(x >> 0*8));
     rb->end = (rb->end + 4)%AIL_RING_SIZE;
 }
 
 void ail_ring_write4lsb(AIL_RingBuffer *rb, u32 x)
 {
-    rb->data[(rb->end + 0)%AIL_RING_SIZE] = (u8)(x >> 0*8);
-    rb->data[(rb->end + 1)%AIL_RING_SIZE] = (u8)(x >> 1*8);
-    rb->data[(rb->end + 2)%AIL_RING_SIZE] = (u8)(x >> 2*8);
-    rb->data[(rb->end + 3)%AIL_RING_SIZE] = (u8)(x >> 3*8);
+    ail_ring_write_at(rb, 0, (u8)(x >> 0*8));
+    ail_ring_write_at(rb, 1, (u8)(x >> 1*8));
+    ail_ring_write_at(rb, 2, (u8)(x >> 2*8));
+    ail_ring_write_at(rb, 3, (u8)(x >> 3*8));
     rb->end = (rb->end + 4)%AIL_RING_SIZE;
 }
 
 void ail_ring_write8msb(AIL_RingBuffer *rb, u64 x)
 {
-    rb->data[(rb->end + 0)%AIL_RING_SIZE] = (u8)(x >> 7*8);
-    rb->data[(rb->end + 1)%AIL_RING_SIZE] = (u8)(x >> 6*8);
-    rb->data[(rb->end + 2)%AIL_RING_SIZE] = (u8)(x >> 5*8);
-    rb->data[(rb->end + 3)%AIL_RING_SIZE] = (u8)(x >> 4*8);
-    rb->data[(rb->end + 4)%AIL_RING_SIZE] = (u8)(x >> 3*8);
-    rb->data[(rb->end + 5)%AIL_RING_SIZE] = (u8)(x >> 2*8);
-    rb->data[(rb->end + 6)%AIL_RING_SIZE] = (u8)(x >> 1*8);
-    rb->data[(rb->end + 7)%AIL_RING_SIZE] = (u8)(x >> 0*8);
+    ail_ring_write_at(rb, 0, (u8)(x >> 7*8));
+    ail_ring_write_at(rb, 1, (u8)(x >> 6*8));
+    ail_ring_write_at(rb, 2, (u8)(x >> 5*8));
+    ail_ring_write_at(rb, 3, (u8)(x >> 4*8));
+    ail_ring_write_at(rb, 4, (u8)(x >> 3*8));
+    ail_ring_write_at(rb, 5, (u8)(x >> 2*8));
+    ail_ring_write_at(rb, 6, (u8)(x >> 1*8));
+    ail_ring_write_at(rb, 7, (u8)(x >> 0*8));
     rb->end = (rb->end + 8)%AIL_RING_SIZE;
 }
 
 void ail_ring_write8lsb(AIL_RingBuffer *rb, u64 x)
 {
-    rb->data[(rb->end + 0)%AIL_RING_SIZE] = (u8)(x >> 0*8);
-    rb->data[(rb->end + 1)%AIL_RING_SIZE] = (u8)(x >> 1*8);
-    rb->data[(rb->end + 2)%AIL_RING_SIZE] = (u8)(x >> 2*8);
-    rb->data[(rb->end + 3)%AIL_RING_SIZE] = (u8)(x >> 3*8);
-    rb->data[(rb->end + 4)%AIL_RING_SIZE] = (u8)(x >> 4*8);
-    rb->data[(rb->end + 5)%AIL_RING_SIZE] = (u8)(x >> 5*8);
-    rb->data[(rb->end + 6)%AIL_RING_SIZE] = (u8)(x >> 6*8);
-    rb->data[(rb->end + 7)%AIL_RING_SIZE] = (u8)(x >> 7*8);
+    ail_ring_write_at(rb, 0, (u8)(x >> 0*8));
+    ail_ring_write_at(rb, 1, (u8)(x >> 1*8));
+    ail_ring_write_at(rb, 2, (u8)(x >> 2*8));
+    ail_ring_write_at(rb, 3, (u8)(x >> 3*8));
+    ail_ring_write_at(rb, 4, (u8)(x >> 4*8));
+    ail_ring_write_at(rb, 5, (u8)(x >> 5*8));
+    ail_ring_write_at(rb, 6, (u8)(x >> 6*8));
+    ail_ring_write_at(rb, 7, (u8)(x >> 7*8));
     rb->end = (rb->end + 8)%AIL_RING_SIZE;
 }
 
@@ -283,6 +302,9 @@ void ail_ring_writen(AIL_RingBuffer *rb, u8 n, u8 *buf)
 {
     for (u8 i = 0; i < n; i++, rb->end = (rb->end+1)%AIL_RING_SIZE) {
         rb->data[rb->end] = buf[i];
+
+        u8 tmp = (rb->end+1)%AIL_RING_SIZE;
+        AIL_RING_ASSERT(tmp != rb->start);
     }
 }
 

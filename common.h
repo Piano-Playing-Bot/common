@@ -7,8 +7,10 @@
 
 #define AIL_DA_IMPL
 #define AIL_BUF_IMPL
+#define AIL_RING_IMPL
 #include "ail/ail.h"
 #include "ail/ail_buf.h"
+#include "ail/ail_ring.h"
 #include <stdint.h>
 
 #ifndef DBG_LOG
