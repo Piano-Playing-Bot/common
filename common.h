@@ -7,8 +7,10 @@
 
 #define AIL_DA_IMPL
 #define AIL_BUF_IMPL
+#define AIL_RING_IMPL
 #include "ail/ail.h"
 #include "ail/ail_buf.h"
+#include "ail/ail_ring.h"
 #include <stdint.h>
 
 #ifndef DBG_LOG
@@ -146,7 +148,7 @@ static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) 
 #define FULL_OCTAVES_AMOUNT ((88 - (PIANO_KEY_AMOUNT - STARTING_KEY))/PIANO_KEY_AMOUNT) // Amount of full octaves (containing all 12 keys) on our piano
 #define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
 #define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
-#define CMDS_LIST_LEN (300 / sizeof(PidiCmd))
+#define CMDS_LIST_LEN (200 / sizeof(PidiCmd))
 #define MAX_CLIENT_MSG_SIZE (12 + 12 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
 #define MAX_SERVER_MSG_SIZE 12
 
@@ -187,6 +189,7 @@ typedef struct ClientMsg {
 
 static inline u8 get_key(PidiCmd cmd)
 {
+    AIL_ASSERT(cmd.key < PIANO_KEY_AMOUNT);
     i16 key = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)cmd.octave + (i16)cmd.key;
     if (key < 0) key = (cmd.key < STARTING_KEY)*(PIANO_KEY_AMOUNT) + cmd.key - STARTING_KEY;
     else if (key >= KEYS_AMOUNT) key = KEYS_AMOUNT + cmd.key - LAST_OCTAVE_LEN - (cmd.key >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
