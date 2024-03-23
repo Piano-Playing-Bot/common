@@ -301,7 +301,9 @@ void ail_ring_writen(AIL_RingBuffer *rb, u8 n, u8 *buf)
 {
     for (u8 i = 0; i < n; i++, rb->end = (rb->end+1)%AIL_RING_SIZE) {
         rb->data[rb->end] = buf[i];
-        AIL_RING_ASSERT(rb->end != rb->start);
+
+        u8 tmp = (rb->end+1)%AIL_RING_SIZE;
+        AIL_RING_ASSERT(tmp != rb->start);
     }
 }
 
