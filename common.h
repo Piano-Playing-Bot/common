@@ -162,7 +162,7 @@ static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) 
 #define FULL_OCTAVES_AMOUNT ((88 - (PIANO_KEY_AMOUNT - STARTING_KEY))/PIANO_KEY_AMOUNT) // Amount of full octaves (containing all 12 keys) on our piano
 #define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
 #define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
-#define CMDS_LIST_LEN (300 / sizeof(PidiCmd))
+#define CMDS_LIST_LEN (200 / sizeof(PidiCmd))
 #define MAX_CLIENT_MSG_SIZE (12 + 12 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
 #define MAX_SERVER_MSG_SIZE 12
 
@@ -217,6 +217,7 @@ AIL_STATIC_ASSERT(MAX_KEYS_AT_ONCE < UINT8_MAX);
 
 static inline u8 get_piano_idx(PidiCmd cmd)
 {
+    AIL_ASSERT(pidi_key(cmd) < PIANO_KEY_AMOUNT);
     i16 key = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)pidi_octave(cmd) + (i16)pidi_key(cmd);
     if (key < 0) key = (pidi_key(cmd) < STARTING_KEY)*(PIANO_KEY_AMOUNT) + pidi_key(cmd) - STARTING_KEY;
     else if (key >= KEYS_AMOUNT) key = KEYS_AMOUNT + pidi_key(cmd) - LAST_OCTAVE_LEN - (pidi_key(cmd) >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
@@ -286,5 +287,3 @@ static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUN
 }
 
 #endif // COMMON_H_
-
-\ No newline at end of file
