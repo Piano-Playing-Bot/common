@@ -169,12 +169,22 @@ The pidi message type is used for sending a list of commands for playing a Song 
 The message should follow this format:
 
 ```
-<Index: 4 bytes> [<time: 4 bytes> <piano: 88 bytes>] <Commands>
+<Index: 4 bytes> [<Time: 4 bytes> <Played_Keys_Count: 1 byte> <Played_Keys>] <Commands>
 ```
 
 The index indicates how many chunks preceeded this one in the song. If and only if the index is 0, the chunk begins a new song.
 
-Only if a new song is started, should the 'time' and 'piano' bytes be given. 'time' should be interpreted as a 32bit unsigned integer giving the time in milliseconds that should be assumed to have already passed before the first command is applied. The piano array of 88 bytes provides the initial configuration of the velocities with which each key of the piano should be played, before the first command should be applied. Usually th piano array will be set completely set to 0.
+Only if a new song is started, should the 'Time', 'Played_Keys_Count' and 'Played_Keys bytes be given.
+'Time' should be interpreted as a 32-bit unsigned integer giving the time in milliseconds that should be assumed to have already passed before the first command is applied.
+The 'Played_Keys_Count' is an unsigned 8-bit integer, providing the number of ' Played_Keys', that follow it. Each 'Played_Key' is 3 bytes and structured as follows:
+
+```
+<length: 1 byte> <piano_key: 1 byte> <velocity: 1 byte>
+```
+
+- length: the amount of centiseconds (1 centisecond == 10 milliseconds) that the key should be pressed for
+- piano_key: the most-significant 4 bits provide the octave (as a signed integer). the least-significant 4 bits provide the key (as an unsigned integer)
+- velocity: the least-significant 4 bits provide the relative strength with which the key should be pressed. The most-significant 4 bits are ignored
 
 This additional information provided for new songs is specifically useful when jumping to specific timestamps in a song. In that case, a 'PIDI' message with index=0 should be sent.
 

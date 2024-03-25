@@ -83,6 +83,7 @@ AIL_RING_DEF u32  ail_ring_peek4lsb (AIL_RingBuffer  rb);
 AIL_RING_DEF u64  ail_ring_peek8msb (AIL_RingBuffer  rb);
 AIL_RING_DEF u64  ail_ring_peek8lsb (AIL_RingBuffer  rb);
 AIL_RING_DEF void ail_ring_peekn    (AIL_RingBuffer  rb, u8 n, u8 *buf);
+AIL_RING_DEF u8    ail_ring_read    (AIL_RingBuffer *rb);
 AIL_RING_DEF u16  ail_ring_read2msb (AIL_RingBuffer *rb);
 AIL_RING_DEF u16  ail_ring_read2lsb (AIL_RingBuffer *rb);
 AIL_RING_DEF u32  ail_ring_read4msb (AIL_RingBuffer *rb);
@@ -178,6 +179,13 @@ void ail_ring_peekn(AIL_RingBuffer rb, u8 n, u8 *buf)
         // @Note: The more safe version would set the value to 0 if it's out of bounds
         // buf[i] = rb.data[j]*(j < rb.end || (rb.end < rb.start && rb.start <= j));
     }
+}
+
+u8 ail_ring_read(AIL_RingBuffer *rb)
+{
+    u8 res = ail_ring_peek(*rb);
+    ail_ring_popn(rb, 1);
+    return res;
 }
 
 u16 ail_ring_read2msb(AIL_RingBuffer *rb)

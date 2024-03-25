@@ -162,8 +162,8 @@ static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) 
 #define FULL_OCTAVES_AMOUNT ((88 - (PIANO_KEY_AMOUNT - STARTING_KEY))/PIANO_KEY_AMOUNT) // Amount of full octaves (containing all 12 keys) on our piano
 #define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
 #define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
-#define CMDS_LIST_LEN (128 / sizeof(PidiCmd))
-#define MAX_CLIENT_MSG_SIZE (12 + 8 + KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
+#define CMDS_LIST_LEN (32 / sizeof(PidiCmd))
+#define MAX_CLIENT_MSG_SIZE (12 + 8 + 1 + MSG_PIDI_PK_ENCODED_SIZE*KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
 #define MAX_SERVER_MSG_SIZE 12
 
 static const CONST_VAR u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8) | (((u32)'P') << 0);
@@ -185,12 +185,21 @@ typedef enum ServerMsgType {
     SMSG_SUCC = (((u32)'S') << 24) | (((u32)'U') << 16) | (((u32)'C') << 8) | (((u32)'C') << 0),
 } ServerMsgType;
 
+typedef struct MsgPidiPlayedKey {
+    u8 len   : 8, // time in centiseconds for which the note should be played
+    octave   : 4,
+    key      : 4,
+    velocity : 4;
+} MsgPidiPlayedKey;
+#define MSG_PIDI_PK_ENCODED_SIZE 3
+
 typedef struct ClientMsgPidiData {
     u32 time;
     u32 cmds_count;
     PidiCmd *cmds;
     u32 idx;
-    u8 *piano;
+    u8 pks_count;
+    MsgPidiPlayedKey *played_keys;
 } ClientMsgPidiData;
 
 typedef struct ClientMsg {
@@ -215,16 +224,67 @@ typedef struct PlayedKeyList {
 AIL_STATIC_ASSERT(MAX_KEYS_AT_ONCE < UINT8_MAX);
 
 
-static inline u8 get_piano_idx(PidiCmd cmd)
+static inline u8 pidi_pk_len(MsgPidiPlayedKey pk)
 {
-    AIL_ASSERT(pidi_key(cmd) < PIANO_KEY_AMOUNT);
-    i16 key = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)pidi_octave(cmd) + (i16)pidi_key(cmd);
-    if (key < 0) key = (pidi_key(cmd) < STARTING_KEY)*(PIANO_KEY_AMOUNT) + pidi_key(cmd) - STARTING_KEY;
-    else if (key >= KEYS_AMOUNT) key = KEYS_AMOUNT + pidi_key(cmd) - LAST_OCTAVE_LEN - (pidi_key(cmd) >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
-    AIL_ASSERT(key >= 0);
-    AIL_ASSERT(key < KEYS_AMOUNT);
+    return pk.len;
+}
+
+static inline i8 pidi_pk_octave(MsgPidiPlayedKey pk)
+{
+    if (pk.octave & 0x8) return (i8)(0xf0 | pk.octave); // Sign-extending 4-bit to 8-bit
+    else return (i8)pk.octave;
+}
+
+static inline PianoKey pidi_pk_key(MsgPidiPlayedKey pk)
+{
+    return (PianoKey)pk.key;
+}
+
+static inline u8 pidi_pk_velocity(MsgPidiPlayedKey pk)
+{
+    return pk.velocity;
+}
+
+static inline void encode_played_key(MsgPidiPlayedKey pk, u8 *buffer)
+{
+    buffer[0] = pk.len;
+    buffer[1] = (pk.octave << 4) | (pk.key);
+    buffer[2] = pk.velocity;
+}
+
+static inline void encode_played_keys(MsgPidiPlayedKey pks[], u8 count, u8 *buffer)
+{
+    for (u8 i = 0; i < count; i++) {
+        encode_played_key(pks[i], &buffer[i*MSG_PIDI_PK_ENCODED_SIZE]);
+    }
+}
+
+static inline MsgPidiPlayedKey decode_played_key(AIL_RingBuffer *rb)
+{
+    AIL_ASSERT(ail_ring_len(*rb) >= MSG_PIDI_PK_ENCODED_SIZE);
+    MsgPidiPlayedKey pk;
+    pk.len      = ail_ring_read(rb);
+    pk.octave   = ail_ring_peek(*rb) >> 4;
+    pk.key      = ail_ring_read(rb) & 0xf;
+    pk.velocity = ail_ring_read(rb);
+    return pk;
+}
+
+static inline u8 get_piano_idx(PianoKey key, i8 octave)
+{
+    AIL_ASSERT(key < PIANO_KEY_AMOUNT);
+    i16 idx = MID_OCTAVE_START_IDX + PIANO_KEY_AMOUNT*(i16)octave + (i16)key;
+    if (idx < 0) idx = (key < STARTING_KEY)*(PIANO_KEY_AMOUNT) + key - STARTING_KEY;
+    else if (idx >= KEYS_AMOUNT) idx = KEYS_AMOUNT + key - LAST_OCTAVE_LEN - (key >= LAST_OCTAVE_LEN)*PIANO_KEY_AMOUNT;
+    AIL_ASSERT(idx >= 0);
+    AIL_ASSERT(idx < KEYS_AMOUNT);
     AIL_STATIC_ASSERT(KEYS_AMOUNT <= UINT8_MAX);
-    return (u8) key;
+    return (u8)idx;
+}
+
+static inline void apply_played_key(MsgPidiPlayedKey pk, u8 piano[KEYS_AMOUNT])
+{
+    piano[get_piano_idx(pidi_pk_key(pk), pidi_pk_octave(pk))] = pidi_pk_velocity(pk);
 }
 
 #define ARR_UNORDERED_RM(arr, idx, len) (arr)[(idx)] = (arr)[--(len)]
@@ -247,7 +307,7 @@ static inline void update_played_keys(u32 cur_time, u8 piano[KEYS_AMOUNT], Playe
 
 static inline void apply_cmd_no_keys_update(PidiCmd cmd, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
 {
-    u8 idx     = get_piano_idx(cmd);
+    u8 idx     = get_piano_idx(pidi_key(cmd), pidi_octave(cmd));
     piano[idx] = pidi_velocity(cmd);
 
     i8 played_idx = -1;
