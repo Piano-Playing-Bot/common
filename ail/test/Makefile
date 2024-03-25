@@ -22,7 +22,7 @@ CFLAGS += -ggdb
 endif
 endif
 
-all: da macros sv fs hm hm_perf
+all: da macros sv fs hm hm_perf buf
 
 da: ail_da.c
 	$(COMP) $(CFLAGS) -o ail_da ail_da.c
@@ -45,3 +45,6 @@ ifeq ($(COMP),cl)
 else
 	$(COMP) $(CFLAGS) -o ail_hm_perf ail_hm_perf.c
 endif
+
+buf: ail_buf.c
+	$(COMP) $(CFLAGS) -o ail_buf ail_buf.c
