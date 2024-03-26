@@ -2,29 +2,9 @@ This document collects the specifications of all protocols and formats that were
 
 # PIDI Format
 
-This section specifies the format of PIDI-files. PIDI serves as a simple and relatively memory-efficient format for storing all data required to play a song automatically on a piano. The format aims to allow microcontrollers to play the music simply and performantly.
+This section specifies the format of PIDI-files. PIDI serves as a memory-efficient and simple-to-use format for storing all data required to play a song automatically on a piano.
 
 ## RFCs
-
-### Tempo
-
-Should the format be extended to include a tempo? Currently, any time specifiers are given as a number of abstract, internal clock cycles. A tempo specification would allow explicitly setting the length of each internal clock cycle in real time.
-
-### Velocity implying on/off state
-
-The velocity could be used to imply the on/off state of a key (since the key is off if and only if the velocity is 0), allowing to discard that value. This would increase the format's memory efficiency and incidentally significantly improve its alignment.
-
-As far as I can tell at the moment, this should not further complicate any other logic.
-
-### Memory-Efficiency
-
-The key can only take on values between 0 and 11. It requires thus at most 4 bits, takes up 8 bits under the current format. To save space (and incidentally also improve alignment somewhat), the `on` and `key` section of a chunk could be stored at different bit-offsets in a single byte instead of being stretched over 2 seperate bytes.
-
-The downside of this approach would be the added complexity in en-/decoding the format.
-
-An alternative approach could be to just leave out the `on` byte, as it can be inferred. If all notes are implied to be off at the beginning, a single chunk could simply mean to toggle the given key.
-
-This might however significantly complicate logic for only allowing a certain number of keys to be played at any time.
 
 ## Specification
 
@@ -39,7 +19,7 @@ A PIDI file follows the following format:
 Unless otherwise specified, small-endian encoding is used.
 
 - **Magic Bytes:**
-The format's Magic bytes are: `PIDI`. It is always written in big-endian format. It stands for 'Piano Digital Interface'.
+The format's Magic bytes are: `PIDI`. It is always written in big-endian format.
 
 - **Commands Count:**
 The amount of commands is given as an unsigned 32-bit number. It should follow exactly as many commands as given here.
@@ -49,19 +29,31 @@ All commands are written here one after another. The amount of commands is given
 
 ### Command Format
 
-Every command follows the following format.
+Every command is encoded as a 32-bit number. The following shows the bit field that makes up these 32 bits:
 
+```c
+delta time : 12 bits
+velocity   : 4  bits
+length     : 8  bits
+octave     : 4  bits
+key        : 4  bits
 ```
-<Time: 8 bytes> <Velocity: 1 byte> <Key: 1 byte> <Octave: 1 byte> <On: 1 byte>
-```
 
-- **Time:**
-The time specifies after how many milliseconds this command should take effect. The time of a command is not allowed to be lower than the time of a previous command. All chunks are thus ordered by their respective time.
+- **delta time:**
+The delta time specifies the amount of milliseconds since the last command that the command should be applied at. This parameter implies that the commands are ordered by the time at which they should be played.
 
-- **Velocity:**
-The velocity specifies how strongly the note should be played.
+- **velocity:**
+The velocity specifies the strength with which to play the note. Strength of playing a note is directly correlated with the volume of the played note.
 
-- **Key:**
+- **len:**
+The length specifies the amount of centiseconds for which the command should be active. A centisecond is 10 milliseconds.
+
+- **octave:**
+The octave gives the octave offset of the musical note that this chunk refers to. The key and octave together specify a specific key on a piano.
+
+The octave should be interpreted as a signed 4-bit integer using two's complement. 0 refers to the middle octave on a piano. Negative numbers refer to octaves below the middle one, while positive numbers refer to higher octaves.
+
+- **key:**
 The key gives the specific musical note that is referred to in this command. The key and octave together specify a specific key on a piano. The following keys are encoded as follows:
 
 ```
@@ -78,15 +70,6 @@ A  = 9
 A# = 10
 B  = 11
 ```
-
-- **Octave:**
-The octave gives the octave offset of the musical note that this chunk refers to. The key and octave together specify a specific key on a piano.
-
-The octave should be interpreted as a signed 8-bit integer using two's complement. 0 refers to the middle octave on a piano. Negative numbers refer to octaves below the middle one, while positive numbers refer to higher octaves.
-
-- **On:**
-This byte represents whether the note should start being played or stop being played. 0 means that the note should stop being played, while any other number means that the note should start being played.
-
 
 # PDIL Format
 
@@ -186,12 +169,22 @@ The pidi message type is used for sending a list of commands for playing a Song 
 The message should follow this format:
 
 ```
-<Index: 4 bytes> [<time: 8 bytes> <piano: 88 bytes>] <Commands>
+<Index: 4 bytes> [<Time: 4 bytes> <Played_Keys_Count: 1 byte> <Played_Keys>] <Commands>
 ```
 
 The index indicates how many chunks preceeded this one in the song. If and only if the index is 0, the chunk begins a new song.
 
-Only if a new song is started, should the 'time' and 'piano' bytes be given. 'time' should be interpreted as a 64bit unsigned integer giving the time in milliseconds that should be assumed to have already passed before the first command is applied. The piano array of 88 bytes provides the initial configuration of the velocities with which each key of the piano should be played, before the first command should be applied. Usually th piano array will be set completely set to 0.
+Only if a new song is started, should the 'Time', 'Played_Keys_Count' and 'Played_Keys bytes be given.
+'Time' should be interpreted as a 32-bit unsigned integer giving the time in milliseconds that should be assumed to have already passed before the first command is applied.
+The 'Played_Keys_Count' is an unsigned 8-bit integer, providing the number of ' Played_Keys', that follow it. Each 'Played_Key' is 3 bytes and structured as follows:
+
+```
+<length: 1 byte> <piano_key: 1 byte> <velocity: 1 byte>
+```
+
+- length: the amount of centiseconds (1 centisecond == 10 milliseconds) that the key should be pressed for
+- piano_key: the most-significant 4 bits provide the octave (as a signed integer). the least-significant 4 bits provide the key (as an unsigned integer)
+- velocity: the least-significant 4 bits provide the relative strength with which the key should be pressed. The most-significant 4 bits are ignored
 
 This additional information provided for new songs is specifically useful when jumping to specific timestamps in a song. In that case, a 'PIDI' message with index=0 should be sent.
 
