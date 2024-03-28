@@ -152,6 +152,7 @@ AIL_GUI_DEF void ail_gui_drawSized(const char *text, RL_Rectangle bounds, AIL_Gu
 AIL_GUI_DEF void ail_gui_drawSizedOuterBounds(const char *text, RL_Rectangle inner, RL_Rectangle outer, AIL_Gui_Style style);
 AIL_GUI_DEF RL_Vector2* ail_gui_drawSizedEx(AIL_Gui_Drawable_Text text, RL_Rectangle bounds, AIL_Gui_Style style);
 AIL_GUI_DEF AIL_Gui_Label ail_gui_newLabel(RL_Rectangle bounds, char *text, AIL_Gui_Style defaultStyle, AIL_Gui_Style hovered);
+AIL_GUI_DEF void ail_gui_freeLabel(AIL_Gui_Label *label);
 AIL_GUI_DEF void ail_gui_rmCharLabel(AIL_Gui_Label *self, u32 idx);
 AIL_GUI_DEF void ail_gui_insertCharLabel(AIL_Gui_Label *self, i32 idx, char c);
 AIL_GUI_DEF void ail_gui_insertSliceLabel(AIL_Gui_Label *self, i32 idx, const char *slice, u32 slice_size);
@@ -582,6 +583,11 @@ AIL_GUI_DEF AIL_Gui_Label ail_gui_newLabel(RL_Rectangle bounds, char *text, AIL_
     };
 }
 
+AIL_GUI_DEF void ail_gui_freeLabel(AIL_Gui_Label *label)
+{
+    ail_da_free(&label->text);
+}
+
 AIL_GUI_DEF void ail_gui_rmCharLabel(AIL_Gui_Label *self, u32 idx)
 {
     if (idx >= self->text.len) return;
@@ -797,7 +803,11 @@ AIL_GUI_DEF AIL_Gui_Update_Res ail_gui_drawInputBox(AIL_Gui_Input_Box *self)
     AIL_Gui_Style style = (hovered || ail_gui_stateIsActive(state)) ? self->label.hovered : self->label.defaultStyle;
 
     const char *text = self->label.text.data;
-    if (!text || !text[0]) text = self->placeholder;
+    if (!text || !text[0]) {
+        text = self->placeholder;
+        if (style.color.a >= 80) style.color.a -= 80;
+        else style.color.a /= 2;
+    }
 
     AIL_Gui_Drawable_Text prepText = {0};
     if (self->selected) res = ail_gui_handleKeysInputBox(self);
