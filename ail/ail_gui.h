@@ -112,7 +112,7 @@ typedef struct {
 typedef struct {
     const char *placeholder; // Placeholder
     AIL_Gui_Label label;         // AIL_Gui_Label to display and update on input
-    u32 cur;                 // Index in the text at which the cursor should be displayed
+    i32 cur;                 // Index in the text at which the cursor should be displayed
     i32 anim_idx;            // Current index in playing animation - if negative, it is currently in waiting time
     u16  rows;               // Amount of rows in label.text. If there's no newline, `rows == 1`
     bool resize;
@@ -138,7 +138,8 @@ AIL_GUI_DEF AIL_Gui_Style ail_gui_cloneStyle(AIL_Gui_Style self);
 AIL_GUI_DEF_INLINE void ail_gui_free_drawable_text(AIL_Gui_Drawable_Text *drawableText);
 AIL_GUI_DEF AIL_Gui_Drawable_Text ail_gui_prepTextForDrawing(const char *text, RL_Rectangle bounds, AIL_Gui_Style style);
 AIL_GUI_DEF RL_Vector2 ail_gui_measureText(const char *text, RL_Rectangle bounds, AIL_Gui_Style style, AIL_Gui_Drawable_Text *drawable_text);
-AIL_GUI_DEF_INLINE void ail_gui_drawPreparedTextHelper(AIL_Gui_Drawable_Text text, AIL_Gui_Style style, bool outerBounds, RL_Rectangle outer);
+AIL_GUI_DEF void ail_gui_drawRectOuterBounds(RL_Rectangle rect, RL_Rectangle outer, RL_Color col);
+AIL_GUI_DEF_INLINE i32 ail_gui_drawPreparedTextWithCursor(AIL_Gui_Drawable_Text text, AIL_Gui_Style style, bool outerBounds, RL_Rectangle outer, i32 cursor_idx, bool handle_mouse);
 AIL_GUI_DEF void ail_gui_drawPreparedTextOuterBounds(AIL_Gui_Drawable_Text text, RL_Rectangle outer, AIL_Gui_Style style);
 AIL_GUI_DEF void ail_gui_drawPreparedText(AIL_Gui_Drawable_Text text, AIL_Gui_Style style);
 AIL_GUI_DEF void ail_gui_drawText(const char *text, RL_Rectangle bounds, AIL_Gui_Style style);
@@ -414,21 +415,43 @@ AIL_GUI_DEF void ail_gui_drawTextCodepointOuterBounds(RL_Font font, i32 codepoin
     DrawTexturePro(font.texture, src, dst, (RL_Vector2){0.0f, 0.0f}, 0.0f, col);
 }
 
-AIL_GUI_DEF_INLINE void ail_gui_drawPreparedTextHelper(AIL_Gui_Drawable_Text text, AIL_Gui_Style style, bool outerBounds, RL_Rectangle outer)
+AIL_GUI_DEF void ail_gui_drawRectOuterBounds(RL_Rectangle rect, RL_Rectangle outer, RL_Color col)
 {
-    if (!text.text) return;
+    i32 p1x = AIL_MAX(outer.x, rect.x);
+    i32 p1y = AIL_MAX(outer.y, rect.y);
+    i32 p2x = AIL_MIN(outer.x + outer.width,  rect.x + rect.width);
+    i32 p2y = AIL_MIN(outer.y + outer.height, rect.y + rect.height);
+    DrawRectangle(p1x, p1y, p2x - p1x, p2y - p1y, col);
+}
+
+AIL_GUI_DEF_INLINE i32 ail_gui_drawPreparedTextWithCursor(AIL_Gui_Drawable_Text text, AIL_Gui_Style style, bool outerBounds, RL_Rectangle outer, i32 cursor_idx, bool handle_mouse)
+{
+    if (!text.text) return -1;
+    RL_Vector2 mouse  = GetMousePosition();
     float scaleFactor = style.font_size/style.font.baseSize; // Character quad scaling factor
-    RL_Vector2 pos = { .x = text.lineXs.data[0], .y = text.y }; // Position to draw current codepoint at
-    u32 lastOffset = 0;
+    RL_Vector2 pos    = { .x = text.lineXs.data[0], .y = text.y }; // Position to draw current codepoint at
+    u32 lastOffset    = 0;
     i32 cp;        // Current codepoint
     i32 cpSize;    // Current codepoint size in bytes
-    for (u32 i = 0, lineIdx = 0, xIdx = 1; (cp = GetCodepointNext(&text.text[i], &cpSize)) != 0; i += cpSize) {
+    i32 rune_idx   = 0;
+    i32 new_idx    = -1;
+    for (u32 i = 0, lineIdx = 0, xIdx = 1; (cp = GetCodepointNext(&text.text[i], &cpSize)) != 0; i += cpSize, rune_idx++) {
         if ((cp != '\n') && (cp != ' ') && (cp != '\t') && (cp != '\r')) {
-            if (outerBounds) {
-                ail_gui_drawTextCodepointOuterBounds(style.font, cp, pos, outer, style.font_size, style.color);
-            } else {
-                RL_DrawTextCodepoint(style.font, cp, pos, style.font_size, style.color);
-            }
+            if (outerBounds) ail_gui_drawTextCodepointOuterBounds(style.font, cp, pos, outer, style.font_size, style.color);
+            else RL_DrawTextCodepoint(style.font, cp, pos, style.font_size, style.color);
+        }
+        if (rune_idx == cursor_idx) {
+            if (outerBounds) ail_gui_drawRectOuterBounds((RL_Rectangle){ pos.x, pos.y, style.font_size, Input_Box_cur_width }, outer, Input_Box_cur_color);
+            else DrawRectangle((i32) pos.x, (i32) pos.y, Input_Box_cur_width, (i32) style.font_size, Input_Box_cur_color);
+        }
+
+        i32 idx = GetGlyphIndex(style.font, cp);
+        float w = style.font.glyphs[idx].advanceX ? style.font.glyphs[idx].advanceX : style.font.recs[idx].width;
+        f32 width = style.cSpacing + scaleFactor*w;
+        if (handle_mouse && (mouse.y <= pos.y + style.font_size) && (mouse.x <= pos.x + width)) {
+            new_idx      = rune_idx;
+            handle_mouse = false;
+
         }
         if (AIL_UNLIKELY(lineIdx < text.lineOffsets.len && i == lastOffset + (i32)text.lineOffsets.data[lineIdx])) {
             pos.y += style.font_size + style.lSpacing;
@@ -437,21 +460,22 @@ AIL_GUI_DEF_INLINE void ail_gui_drawPreparedTextHelper(AIL_Gui_Drawable_Text tex
             lineIdx++;
             lastOffset = i;
         } else {
-            i32 idx = GetGlyphIndex(style.font, cp);
-            float w = style.font.glyphs[idx].advanceX ? style.font.glyphs[idx].advanceX : style.font.recs[idx].width;
-            pos.x += style.cSpacing + scaleFactor*w;
+            pos.x += width;
         }
     }
+    if (handle_mouse && (mouse.y <= pos.y + style.font_size) && (mouse.x >= pos.x)) new_idx = rune_idx;
+    if (rune_idx == cursor_idx) DrawRectangle((i32) pos.x, (i32) pos.y, Input_Box_cur_width, (i32) style.font_size, Input_Box_cur_color);
+    return (new_idx < 0) ? cursor_idx : new_idx;
 }
 
 AIL_GUI_DEF void ail_gui_drawPreparedText(AIL_Gui_Drawable_Text text, AIL_Gui_Style style)
 {
-    ail_gui_drawPreparedTextHelper(text, style, false, (RL_Rectangle){0});
+    ail_gui_drawPreparedTextWithCursor(text, style, false, (RL_Rectangle){0}, -1, false);
 }
 
 AIL_GUI_DEF void ail_gui_drawPreparedTextOuterBounds(AIL_Gui_Drawable_Text text, RL_Rectangle outer, AIL_Gui_Style style)
 {
-    ail_gui_drawPreparedTextHelper(text, style, true, outer);
+    ail_gui_drawPreparedTextWithCursor(text, style, true, outer, -1, false);
 }
 
 AIL_GUI_DEF void ail_gui_drawBounds(RL_Rectangle bounds, AIL_Gui_Style style)
@@ -519,50 +543,6 @@ AIL_GUI_DEF void ail_gui_drawSizedOuterBounds(const char *text, RL_Rectangle inn
     ail_gui_drawTextOuterBounds(text, inner, outer, style);
 }
 
-/// Same as ail_gui_drawSized, except it returns an array of coordinates for each byte in the drawn text
-AIL_GUI_DEF RL_Vector2* ail_gui_drawSizedEx(AIL_Gui_Drawable_Text text, RL_Rectangle bounds, AIL_Gui_Style style)
-{
-    // @Cleanup: Almost identical code to ail_gui_drawPreparedText
-    if (style.border_width > 0) {
-        RL_Rectangle border = {
-            .x = bounds.x - style.border_width,
-            .y = bounds.y - style.border_width,
-            .width  = bounds.width + 2*style.border_width,
-            .height = bounds.height + 2*style.border_width,
-        };
-        DrawRectangleLinesEx(border, style.border_width, style.border_color);
-    }
-    DrawRectangle(bounds.x, bounds.y, bounds.width, bounds.height, style.bg);
-
-    if (!text.text) return NULL;
-    RL_Vector2 *res = ail_gui_allocator.alloc(ail_gui_allocator.data, text.text_len * sizeof(RL_Vector3));
-    float scaleFactor = style.font_size/style.font.baseSize; // Character quad scaling factor
-    RL_Vector2 pos = { .x = text.lineXs.data[0], .y = text.y }; // Position to draw current codepoint at
-    u32 lastOffset = 0;
-    i32 cp;        // Current codepoint
-    i32 cpSize;    // Current codepoint size in bytes
-    for (u32 i = 0, lineIdx = 0, xIdx = 1; (cp = GetCodepointNext(&text.text[i], &cpSize)) != 0; i += cpSize) {
-        for (i32 j = 0; j < cpSize; j++) {
-            res[i + j] = pos;
-        }
-        if ((cp != '\n') && (cp != ' ') && (cp != '\t') && (cp != '\r')) {
-            RL_DrawTextCodepoint(style.font, cp, pos, style.font_size, style.color);
-        }
-        if (AIL_UNLIKELY(lineIdx < text.lineOffsets.len && i == lastOffset + (i32)text.lineOffsets.data[lineIdx])) {
-            pos.y += style.font_size + style.lSpacing;
-            pos.x  = text.lineXs.data[xIdx];
-            xIdx++;
-            lineIdx++;
-            lastOffset = i;
-        } else {
-            i32 idx = GetGlyphIndex(style.font, cp);
-            float w = style.font.glyphs[idx].advanceX ? style.font.glyphs[idx].advanceX : style.font.recs[idx].width;
-            pos.x += style.cSpacing + scaleFactor*w;
-        }
-    }
-    return res;
-}
-
 AIL_GUI_DEF AIL_Gui_Label ail_gui_newLabel(RL_Rectangle bounds, char *text, AIL_Gui_Style defaultStyle, AIL_Gui_Style hovered)
 {
     i32 text_len = text == NULL ? 0 : TextLength(text);
@@ -592,6 +572,7 @@ AIL_GUI_DEF void ail_gui_rmCharLabel(AIL_Gui_Label *self, u32 idx)
 {
     if (idx >= self->text.len) return;
     ail_da_rm(&self->text, idx);
+    self->text.data[self->text.len] = '\0';
 }
 
 AIL_GUI_DEF void ail_gui_insertCharLabel(AIL_Gui_Label *self, i32 idx, char c)
@@ -716,87 +697,10 @@ AIL_GUI_DEF void ail_gui_resetInputBoxAnim(AIL_Gui_Input_Box *self)
     self->anim_idx = -Input_Box_anim_len;
 }
 
-AIL_GUI_DEF AIL_Gui_Update_Res ail_gui_handleKeysInputBox(AIL_Gui_Input_Box *self)
-{
-    AIL_Gui_Update_Res res = {0}; // @TODO: Default values
-    if (AIL_UNLIKELY(self->cur > self->label.text.len)) self->cur = self->label.text.len - 1;
-
-    if (IsKeyPressed(KEY_ESCAPE)) {
-        res.escape = true;
-    } else if (IsKeyPressed(KEY_ENTER)) {
-        if (self->multiline || (IsKeyPressed(KEY_LEFT_SHIFT) || IsKeyPressed(KEY_RIGHT_SHIFT))) {
-            ail_gui_insertCharLabel(&self->label, self->cur, '\n');
-            self->cur += 1;
-            res.updated = true;
-        } else {
-            res.enter = true;
-        }
-    } else if (IsKeyPressed(KEY_TAB)) {
-        res.tab = true;
-    } else if (IsKeyPressed(KEY_RIGHT)) {
-        if (self->cur < self->label.text.len - 1) self->cur += 1;
-    } else if (IsKeyPressed(KEY_LEFT)) {
-        if (self->cur > 0) self->cur -= 1;
-    } else if (IsKeyPressed(KEY_UP)) {
-        u32 prev_row = 0;
-        u32 curr_row = 0;
-        u32 i = 0;
-        while (i < self->cur) {
-            if (self->label.text.data[i] == '\n') {
-                prev_row = curr_row;
-                curr_row = i + 1;
-            }
-            i += 1;
-        }
-        if (curr_row == 0) {
-            self->cur = 0;
-        } else {
-            u32 d = self->cur - curr_row;
-            self->cur = (curr_row - prev_row > d) ? prev_row + d : curr_row - 1;
-        }
-    } else if (IsKeyPressed(KEY_DOWN)) {
-        // @TODO
-    } else if (IsKeyPressed(KEY_BACKSPACE)) {
-        if (self->cur > 0) {
-            ail_gui_rmCharLabel(&self->label, self->cur - 1);
-            self->cur -= 1;
-            res.updated = true;
-        }
-    } else if (IsKeyPressed(KEY_DELETE)) {
-        if (self->cur < self->label.text.len - 1) {
-            ail_gui_rmCharLabel(&self->label, self->cur);
-            res.updated = true;
-        }
-    } else {
-        i32 codepoint = GetCharPressed();
-        if (codepoint > 0) {
-            res.updated = true;
-            if (codepoint <= 0xff) {
-                ail_gui_insertCharLabel(&self->label, self->cur, (u8) codepoint);
-                self->cur += 1;
-            } else if (codepoint <= 0xffff) {
-                char slice[] = {(u8)(codepoint & 0xff00), (u8)(codepoint & 0xff)};
-                ail_gui_insertSliceLabel(&self->label, self->cur, slice, 2);
-                self->cur += 2;
-            } else if (codepoint <= 0xffffff) {
-                char slice[] = {(u8)(codepoint & 0xff0000), (u8)(codepoint & 0xff00), (u8)(codepoint & 0xff)};
-                ail_gui_insertSliceLabel(&self->label, self->cur, slice, 3);
-                self->cur += 3;
-            } else {
-                char slice[] = {(u8)(codepoint & 0xff000000), (u8)(codepoint & 0xff0000), (u8)(codepoint & 0xff00), (u8)(codepoint & 0xff)};
-                ail_gui_insertSliceLabel(&self->label, self->cur, slice, 4);
-                self->cur += 4;
-            }
-        }
-    }
-
-    return res;
-}
-
 // Draws the AIL_Gui_Input_Box, but also does more, like handling any user input if the box is active
 AIL_GUI_DEF AIL_Gui_Update_Res ail_gui_drawInputBox(AIL_Gui_Input_Box *self)
 {
-    AIL_Gui_Update_Res res = {0}; // @TODO: Default values
+    AIL_Gui_Update_Res res = {0};
     bool hovered  = ail_gui_isInputBoxHovered(*self);
     AIL_Gui_State state = ail_gui_getInputBoxStateHelper(self, hovered);
     if (state == AIL_GUI_STATE_HIDDEN) return res;
@@ -810,75 +714,54 @@ AIL_GUI_DEF AIL_Gui_Update_Res ail_gui_drawInputBox(AIL_Gui_Input_Box *self)
     }
 
     AIL_Gui_Drawable_Text prepText = {0};
-    if (self->selected) res = ail_gui_handleKeysInputBox(self);
+    if (self->selected) {
+        if (IsKeyPressed(KEY_TAB)) {
+            res.tab = true;
+        }
+        else if (IsKeyPressed(KEY_ENTER)) {
+            res.enter = true;
+        }
+        else if (IsKeyPressed(KEY_LEFT)) {
+            self->cur = AIL_MAX(self->cur - 1, 0);
+        }
+        else if (IsKeyPressed(KEY_RIGHT)) {
+            self->cur = AIL_MIN(self->cur + 1, (i32)self->label.text.len - 1);
+        }
+        else if (IsKeyPressed(KEY_DOWN)) {
+            self->cur = self->label.text.len - 1;
+        }
+        else if (IsKeyPressed(KEY_UP)) {
+            self->cur = 0;
+        }
+        else if (IsKeyPressed(KEY_DELETE)) {
+            ail_gui_rmCharLabel(&self->label, self->cur);
+            res.updated = true;
+        }
+        else if (IsKeyPressed(KEY_BACKSPACE) && self->cur > 0) {
+            self->cur -= 1;
+            ail_gui_rmCharLabel(&self->label, self->cur);
+            res.updated = true;
+        } else {
+            int cp = GetCharPressed();
+            while (cp > 0) {
+                ail_gui_insertCharLabel(&self->label, self->cur, (char)cp);
+                self->cur += 1;
+                cp >>= 8;
+            }
+            res.updated = true;
+        }
+    }
     if (res.updated && self->resize) prepText = ail_gui_resizeLabelEx(&self->label, state, text);
 
     if (!prepText.lineXs.len) prepText = ail_gui_prepTextForDrawing(text, self->label.bounds, style);
-    RL_Vector2 *coords = ail_gui_drawSizedEx(prepText, self->label.bounds, style);
-
-    // If mouse was clicked on the label, the cursor should be updated correspondingly
-    if (state == AIL_GUI_STATE_PRESSED) {
-        RL_Vector2 mouse  = GetMousePosition();
-        u32 newCur     = 0;
-        float distance = FLT_MAX;
-        u16 rows       = 1;
-        u32 i          = 0;
-        while (i < prepText.text_len) {
-            RL_Vector2 c = coords[i];
-            if (i + 1 == prepText.text_len && c.x < mouse.x) {
-                newCur = prepText.text_len;
-                break;
-            } else if (mouse.x < c.x) {
-                float d = mouse.y - c.y;
-                if (d < 0) {
-                    newCur = i;
-                    break;
-                } else if (d < distance) {
-                    newCur   = i;
-                    distance = d;
-                    if (rows == self->rows) break;
-                }
-            }
-            i += 1;
-        }
-        self->cur = newCur;
+    ail_gui_drawBounds(self->label.bounds, style);
+    i32 newCur = ail_gui_drawPreparedTextWithCursor(prepText, style, false, self->label.bounds, ail_gui_stateIsActive(state) ? self->cur : -1, IsMouseButtonPressed(MOUSE_BUTTON_LEFT));
+    if (newCur >= 0 && newCur != self->cur) {
         self->anim_idx = -Input_Box_anim_wait;
-    }
-
-    // Display cursor
-    if (ail_gui_stateIsActive(state)) {
-        float anim_len_half = (float)(Input_Box_anim_len)/2.0f;
-        i32 ai = (self->anim_idx < 0) ? 0 : self->anim_idx;
-            ai = anim_len_half - ai;
-        if (ai < 0) ai = -ai;
-        float scale  = style.font_size;
-        float height = scale * ((float)(ai))/anim_len_half;
-
-        float x, y;
-        if (prepText.text_len == 0) {
-            x = (float)(self->label.bounds.x + style.pad);
-            y = (float)(self->label.bounds.y + style.pad);
-        } else if (self->cur < prepText.text_len) {
-            x = coords[self->cur].x;
-            y = coords[self->cur].y;
-        } else {
-            i32 cp_size    = 0;
-            i32 cp         = GetCodepointNext(&self->label.text.data[prepText.text_len-1], &cp_size);
-            float advanceX = (float)(GetGlyphInfo(style.font, cp).advanceX);
-            x = coords[prepText.text_len-1].x + advanceX;
-            y = coords[prepText.text_len-1].y;
-        }
-
-        x -= ((float) Input_Box_cur_width)/2.0f;
-        y += (scale - height)/2.0f;
-        DrawRectangle((i32) x, (i32) y, Input_Box_cur_width, (i32) height, Input_Box_cur_color);
-
-        self->anim_idx += 1;
-        if (self->anim_idx >= Input_Box_anim_len) self->anim_idx = 0;
+        self->cur = newCur;
     }
 
     ail_gui_free_drawable_text(&prepText);
-    ail_gui_allocator.free_one(ail_gui_allocator.data, coords);
     if (hovered) AIL_GUI_SET_CURSOR(MOUSE_CURSOR_IBEAM);
     res.state = state;
     return res;
