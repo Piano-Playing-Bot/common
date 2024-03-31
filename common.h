@@ -55,7 +55,7 @@ typedef struct PidiCmd {
     key      : 4;  // The key of the note
 } PidiCmd;
 AIL_DA_INIT(PidiCmd);
-#define MAX_VELOCITY 1<<4
+#define MAX_VELOCITY (1<<4)
 #define LEN_FACTOR 10 // Factor by which to multiply a PidiCmd's `len` with, to get the length in ms
 #define ENCODED_CMD_LEN 4
 AIL_STATIC_ASSERT(ENCODED_CMD_LEN == sizeof(PidiCmd));
