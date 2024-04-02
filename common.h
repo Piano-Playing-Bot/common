@@ -289,6 +289,14 @@ static inline void apply_played_key(MsgPidiPlayedKey pk, u8 piano[KEYS_AMOUNT])
 
 #define ARR_UNORDERED_RM(arr, idx, len) (arr)[(idx)] = (arr)[--(len)]
 
+static inline i8 get_played_key_index(u8 piano_idx, PlayedKeyList played_keys)
+{
+    for (i8 i = 0; i < played_keys.count; i++) {
+        if (played_keys.keys[i].idx == piano_idx) return i;
+    }
+    return -1;
+}
+
 static inline void update_played_keys(u32 cur_time, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
 {
     u32 time_offset = cur_time - played_keys->start_time;
