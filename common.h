@@ -163,48 +163,46 @@ static const CONST_VAR u32 PDIL_MAGIC = (((u32)'P') << 24) | (((u32)'D') << 16) 
 #define LAST_OCTAVE_LEN (KEYS_AMOUNT - (FULL_OCTAVES_AMOUNT*PIANO_KEY_AMOUNT + (PIANO_KEY_AMOUNT - STARTING_KEY))) // Amount of keys in the highest (none-full) octave
 #define MID_OCTAVE_START_IDX ((PIANO_KEY_AMOUNT - STARTING_KEY) + PIANO_KEY_AMOUNT*(FULL_OCTAVES_AMOUNT/2)) // Number of keys before the frst key in the middle octave on our piano
 #define CMDS_LIST_LEN (32 / sizeof(PidiCmd))
-#define MAX_CLIENT_MSG_SIZE (12 + 8 + 1 + MSG_PIDI_PK_ENCODED_SIZE*KEYS_AMOUNT + CMDS_LIST_LEN*ENCODED_CMD_LEN)
-#define MAX_SERVER_MSG_SIZE 12
+#define MAX_SERVER_MSG_SIZE 6
 
-static const CONST_VAR u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8) | (((u32)'P') << 0);
+static const CONST_VAR u32 SPPP_MAGIC = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'P') << 8);
 
 typedef enum ClientMsgType {
-    CMSG_NONE = 0, // If no message came in
-    CMSG_PING = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'N') << 8) | (((u32)'G') << 0),
-    CMSG_PIDI = (((u32)'P') << 24) | (((u32)'I') << 16) | (((u32)'D') << 8) | (((u32)'I') << 0),
-    CMSG_STOP = (((u32)'S') << 24) | (((u32)'T') << 16) | (((u32)'O') << 8) | (((u32)'P') << 0),
-    CMSG_CONT = (((u32)'C') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'T') << 0),
-    CMSG_LOUD = (((u32)'L') << 24) | (((u32)'O') << 16) | (((u32)'U') << 8) | (((u32)'D') << 0),
-    CMSG_SPED = (((u32)'S') << 24) | (((u32)'P') << 16) | (((u32)'E') << 8) | (((u32)'D') << 0),
+    CMSG_NONE      =  0,
+    CMSG_PING      = 'P',
+    CMSG_CONTINUE  = 'C',
+    CMSG_SPEED     = 'S',
+    CMSG_VOLUME    = 'V',
+    CMSG_MUSIC     = 'M',
+    CMSG_NEW_MUSIC = 'N',
 } ClientMsgType;
 
 typedef enum ServerMsgType {
-    SMSG_NONE = 0,
-    SMSG_REQP = (((u32)'R') << 24) | (((u32)'E') << 16) | (((u32)'Q') << 8) | (((u32)'P') << 0),
-    SMSG_PONG = (((u32)'P') << 24) | (((u32)'O') << 16) | (((u32)'N') << 8) | (((u32)'G') << 0),
-    SMSG_SUCC = (((u32)'S') << 24) | (((u32)'U') << 16) | (((u32)'C') << 8) | (((u32)'C') << 0),
+    SMSG_NONE    =  0,
+    SMSG_PONG    = 'p',
+    SMSG_SUCCESS = 's',
+    SMSG_REQUEST = 'r',
 } ServerMsgType;
 
-typedef struct MsgPidiPlayedKey {
+typedef struct PlayedKeySPPP {
     u8 len   : 8, // time in centiseconds for which the note should be played
     octave   : 4,
     key      : 4,
     velocity : 4;
-} MsgPidiPlayedKey;
-#define MSG_PIDI_PK_ENCODED_SIZE 3
+} PlayedKeySPPP;
+#define SPPP_PK_ENCODED_SIZE 3
 
 typedef struct ClientMsgPidiData {
-    u32 time;
-    u32 cmds_count;
-    PidiCmd *cmds;
-    u32 idx;
     u8 pks_count;
-    MsgPidiPlayedKey *played_keys;
+    PlayedKeySPPP *played_keys;
+    u16 cmds_count;
+    PidiCmd *cmds;
 } ClientMsgPidiData;
 
 typedef struct ClientMsg {
     ClientMsgType type;
     union {
+        u8  b;
         f32 f;
         ClientMsgPidiData pidi;
     } data;
@@ -224,45 +222,45 @@ typedef struct PlayedKeyList {
 AIL_STATIC_ASSERT(MAX_KEYS_AT_ONCE < UINT8_MAX);
 
 
-static inline u8 pidi_pk_len(MsgPidiPlayedKey pk)
+static inline u8 sppp_pk_len(PlayedKeySPPP pk)
 {
     return pk.len;
 }
 
-static inline i8 pidi_pk_octave(MsgPidiPlayedKey pk)
+static inline i8 sppp_pk_octave(PlayedKeySPPP pk)
 {
     if (pk.octave & 0x8) return (i8)(0xf0 | pk.octave); // Sign-extending 4-bit to 8-bit
     else return (i8)pk.octave;
 }
 
-static inline PianoKey pidi_pk_key(MsgPidiPlayedKey pk)
+static inline PianoKey sppp_pk_key(PlayedKeySPPP pk)
 {
     return (PianoKey)pk.key;
 }
 
-static inline u8 pidi_pk_velocity(MsgPidiPlayedKey pk)
+static inline u8 sppp_pk_velocity(PlayedKeySPPP pk)
 {
     return pk.velocity;
 }
 
-static inline void encode_played_key(MsgPidiPlayedKey pk, u8 *buffer)
+static inline void encode_played_key(PlayedKeySPPP pk, u8 *buffer)
 {
     buffer[0] = pk.len;
     buffer[1] = (pk.octave << 4) | (pk.key);
     buffer[2] = pk.velocity;
 }
 
-static inline void encode_played_keys(MsgPidiPlayedKey pks[], u8 count, u8 *buffer)
+static inline void encode_played_keys(PlayedKeySPPP pks[], u8 count, u8 *buffer)
 {
     for (u8 i = 0; i < count; i++) {
-        encode_played_key(pks[i], &buffer[i*MSG_PIDI_PK_ENCODED_SIZE]);
+        encode_played_key(pks[i], &buffer[i*SPPP_PK_ENCODED_SIZE]);
     }
 }
 
-static inline MsgPidiPlayedKey decode_played_key(AIL_RingBuffer *rb)
+static inline PlayedKeySPPP decode_played_key(AIL_RingBuffer *rb)
 {
-    AIL_ASSERT(ail_ring_len(*rb) >= MSG_PIDI_PK_ENCODED_SIZE);
-    MsgPidiPlayedKey pk;
+    AIL_ASSERT(ail_ring_len(*rb) >= SPPP_PK_ENCODED_SIZE);
+    PlayedKeySPPP pk;
     pk.len      = ail_ring_read(rb);
     pk.octave   = ail_ring_peek(*rb) >> 4;
     pk.key      = ail_ring_read(rb) & 0xf;
@@ -280,11 +278,6 @@ static inline u8 get_piano_idx(PianoKey key, i8 octave)
     AIL_ASSERT(idx < KEYS_AMOUNT);
     AIL_STATIC_ASSERT(KEYS_AMOUNT <= UINT8_MAX);
     return (u8)idx;
-}
-
-static inline void apply_played_key(MsgPidiPlayedKey pk, u8 piano[KEYS_AMOUNT])
-{
-    piano[get_piano_idx(pidi_pk_key(pk), pidi_pk_octave(pk))] = pidi_pk_velocity(pk);
 }
 
 #define ARR_UNORDERED_RM(arr, idx, len) (arr)[(idx)] = (arr)[--(len)]
@@ -351,6 +344,17 @@ static inline void apply_cmd_no_keys_update(PidiCmd cmd, u8 piano[KEYS_AMOUNT], 
 static inline void apply_pidi_cmd(u32 cur_time, PidiCmd cmd, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
 {
     update_played_keys(cur_time, piano, played_keys);
+    apply_cmd_no_keys_update(cmd, piano, played_keys);
+}
+
+static inline void apply_played_key(PlayedKeySPPP pk, u8 piano[KEYS_AMOUNT], PlayedKeyList *played_keys)
+{
+    PidiCmd cmd;
+    cmd.dt       = 0,
+    cmd.key      = sppp_pk_key(pk),
+    cmd.len      = sppp_pk_len(pk),
+    cmd.octave   = sppp_pk_octave(pk),
+    cmd.velocity = sppp_pk_velocity(pk),
     apply_cmd_no_keys_update(cmd, piano, played_keys);
 }
 

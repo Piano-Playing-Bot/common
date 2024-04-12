@@ -118,11 +118,7 @@ The filename of the PIDI file, that contains the data for the given song. It sho
 
 # Self-Playing-Piano Protocol
 
-This section outlines the protocol used for the communication between the UI and the microcontroller, that plays the music.
-
-The protocol will refer to the microcontroller as the 'server' and the UI application as the 'client'. The reasoning behind this naming is as follows: The server will idly wait until it receives a message. As in general client-server architectures, the client has to initiate the communication.
-
-When talking about either the client or the server, the term 'node' may also be used in the protocol's specification.
+This section outlines the protocol used for the communication between the UI and the microcontroller (MC), that plays the music. The UI and MC are also referred to as nodes in this specifcation.
 
 ## RFCs
 
@@ -131,97 +127,120 @@ When talking about either the client or the server, the term 'node' may also be 
 Any message between the server and client has the following format:
 
 ```
-<Magic Bytes: 4 bytes> <Message-Type: 4 bytes> <Size: 4 bytes> <Message: Size bytes>
+<Magic Bytes: 3 bytes> <Message-Type: 1 byte> [<Payload: n bytes>]
 ```
 
 Unless otherwise specified, small-endian encoding is used.
 
 - **Magic Bytes:**
-The protocol's Magic bytes are: `SPPP`. It is always written in big-endian format. It stands for 'Self-Playing-Piano Protocol'.
+The protocol's Magic bytes are: `SPP`. It is always written in big-endian format. It stands for '**S**elf-**P**laying-**P**iano'.
 
 - **Message-Type:**
-The different types of messages that exist, are listed below under `Message`. Each message type has its own 4 character signature, by which it is defined. Should a node not recognize the provided message type, it should read the amount of given bytes and skip the message. Version upgrades should easily stay backward-compatible that way.
+The different types of messages that exist, are listed below under `Payload`. Each message type has its own 1 character signature, by which it is defined.
 
-- **Size:**
-The size of the message is given as an unsigned 32-bit number. This size does not include the 4 bytes of the size or the 8 bytes that come before the size.
+Should a node not recognize the provided message type, it should ignore all following bytes until it reads the Magic Bytes again. Version upgrades should easily stay backward-compatible that way.
 
-- **Message:**
-There are exactly as many bytes for the message as given in `Size`. How to interpret the message depends on the `Message-Type`. The message's format for each possible type is given below.
+The protocol uses the convention to use ASCII-encoded characters for the Message Type's identifier. Uppercase characters are used for messages sent by the UI and lowercase characters for messages sent by the MC.
 
-### 'PING'
+- **Payload:**
+How to interpret the payload depends on the `Message-Type`. The payload's format for each specified message type is given below. The title of each section provides the message's human-readable name and its 1-byte identifier.
 
-The ping message type exists to check whether the server is available. It can also be used by the client to initially identify the port, on which the server is connected.
+### Ping: 'P'
 
-Only the client can send this message. The server has to respond with a `PONG` message. The message should be empty or ignored.
+The Ping message type exists to check whether the MC is available. It can also be used by the UI to initially identify the port, on which the MC is connected.
 
-### 'PONG'
+The initial message sent from the UI to the MC must be a Ping message.
 
-This message should only be sent by the server as a reply to the `PING` message. The message bytes should be empty or ignored.
+There is no payload in this message.
 
-### 'SUCC'
+### Pong: 'p'
 
-The succ message is only sent by the server as a response to the client. It indicates successfully receiving and executing the client's last message. The message bytes should be empty or ignored.
+This message should only be sent by the MC as a reply to the Ping message.
 
-### 'PIDI'
+The payload should be an unsigned 16-bit number representing the maximum amount of `PidiCmd`s that may be sent in a Music or New-Music message.
 
-The pidi message type is used for sending a list of commands for playing a Song to the Arduino. The Commands are given in the same format as in [PIDI](#pidi-format) files. Instead of sending the potentially very big PIDI file all at once, we send it in chunks to allow for streaming. The client can initiate sending the initial chunk of a song at any time. The next chunks of the song should however not be sent until the server requests them via the 'REQP' message.
+### Success: 's'
 
-The message should follow this format:
+The Successs message is only sent by the MC as a response to the UI. It indicates successfully receiving and executing the UI's last message.
+
+The UI should wait until receiving a Success message before sending the next message. When no Success message is received by the UI before the timeout is reached, the same message must be sent again.
+
+There is no payload in this message.
+
+### Continue: 'C'
+
+The Continue message is sent by the UI to pause or continue playing the song.
+
+The payload should consist of a single byte. When the byte is 0, the song should be paused and continued otherwise.
+
+The MC must respond with a Success message.
+
+### Volume: 'V'
+
+The Volume message is sent by the UI to set the factor by which the MC multiplies each note's velocity and thus its loudness.
+
+The payload should consist of a single 32-bit IEEE-754 floating point number.
+
+The MC must respond with a Success message.
+
+### Speed: 'S'
+
+The Speed message is sent by the UI to set the factor by which the MC's timer is multiplied.
+
+The payload should consist of a single 32-bit IEEE-754 floating point number.
+
+The MC must respond with a Success message.
+
+### New-Music: 'N'
+
+The New-Music message is meant for initiating the start of a song. It can be sent at any time by the UI.
+
+Subsequent chunks of the song should be sent via the Music message instead, however.
+
+The payload should be encoded as follows:
 
 ```
-<Index: 4 bytes> [<Time: 4 bytes> <Played_Keys_Count: 1 byte> <Played_Keys>] <Commands>
+<PlayedKeys-Count: 1 byte> [<PlayedKey: 3 bytes>]+  <Commands-Count: 2 bytes> [<Command: 4 bytes>]+
 ```
 
-The index indicates how many chunks preceeded this one in the song. If and only if the index is 0, the chunk begins a new song.
+There should be exactly as many PlayedKeys as provided in PlayedKeys-Count and as many Commands as provided in the Commands-Count.
 
-Only if a new song is started, should the 'Time', 'Played_Keys_Count' and 'Played_Keys bytes be given.
-'Time' should be interpreted as a 32-bit unsigned integer giving the time in milliseconds that should be assumed to have already passed before the first command is applied.
-The 'Played_Keys_Count' is an unsigned 8-bit integer, providing the number of ' Played_Keys', that follow it. Each 'Played_Key' is 3 bytes and structured as follows:
+Each PlayedKey is encoded as follows:
 
 ```
-<length: 1 byte> <piano_key: 1 byte> <velocity: 1 byte>
+len:       8 bits
+octave:    4 bits (signed)
+key:       4 bits
+velocity:  4 bits
+<padding>: 4 bits
 ```
 
-- length: the amount of centiseconds (1 centisecond == 10 milliseconds) that the key should be pressed for
-- piano_key: the most-significant 4 bits provide the octave (as a signed integer). the least-significant 4 bits provide the key (as an unsigned integer)
-- velocity: the least-significant 4 bits provide the relative strength with which the key should be pressed. The most-significant 4 bits are ignored
+where all its parameters have the same meaning as in the [PIDI Format](#pidi-format).
 
-This additional information provided for new songs is specifically useful when jumping to specific timestamps in a song. In that case, a 'PIDI' message with index=0 should be sent.
+New songs should be started as soon as the entire message was successfully received.
 
-New songs should be started as soon as the entire message was successfully received. Otherwise the commands should be stored by the server in a second commands buffer that is only applied after the first commands buffer was applied fully.
+The MC has to respond with a Success message.
 
-The Commands are given in the same format as in PIDI files. The amount of provided commands can be inferred through the size of the entire message.
+### Music: 'M'
 
-Only the client can send this message. The server has to respond with a `SUCC` message.
+The Music message exists for sending a list of commands for playing a Song to the MC. The Commands are given in the same format as in [PIDI](#pidi-format) files. Instead of sending the potentially very big PIDI file all at once, it is sent in chunks, thus effectively implementing a method of streaming the music.
 
-### 'REQP'
+A Music message may only be sent as a response to a Request message.
 
-The reqp message is used to request the next pidi-chunks and is only sent by the server. The message should be exactly 4 bytes, that should be interpreted as an unsigned integer, giving the next chunk index that the server is expecting.
+The payload should be encoded as follows:
 
-The Client has to respond with a 'PIDI' message. If the song is over, the commands count in the 'PIDI' message should be 0.
+```
+<Commands-Count: 2 bytes> [<Command: 4 bytes>]+
+```
 
-### 'STOP'
+There should be exactly as many Commands as provided in the Commands-Count.
 
-The stop message is only sent by the client. It tells the server to stop the current song. The message bytes should be empty or ignored.
+Upon receiving the message, the MC must respond with a Success message.
 
-The server has to respond with a 'SUCC' message.
+### Request: 'r'
 
-### 'CONT'
+The Request message is used to tell the UI, that the MC is ready to receive the next chunk of the song.
 
-The cont message is only sent by the client. It tells the server to continue the current song. The message bytes should be empty or ignored.
+There is no payload in this message.
 
-The server has to respond with a 'SUCC' message.
-
-### 'LOUD'
-
-The 'loud' message is only sent by the client. It tells the server to adjust the volume by a given value. Adjusting volume is done on the server side by de-/increasing the velocity levels of each command for the song. The volume levels should stay as given until the next 'loud' message.
-
-The message should be exactly 4 bytes, that should be interpreted as a 32bit floating point number, giving the factor by which to multiply all velocity values.
-
-The server has to respond with a 'SUCC' message.
-
-### 'SPED'
-
-The 'sped' message is only sent by the client. It tells the server the speed factor with which to continue playing the song. The message should consist of 4 bytes, that should be interpreted as a floating point number, giving the speed factor. The speed levels should stay as given until the next 'sped' message.
-
-The server has to respond with a 'SUCC' message.
+The UI has to respond with a Music message. If the song is over, the Commands-Count in the Music message should be set to 0.
