@@ -180,6 +180,12 @@ typedef char*    str;
 	#define AIL_PACK_END()
 #endif
 
+#if defined(__cplusplus) && __cplusplus >= 201703L
+	#define AIL_FALL_THROUGH() [[fallthrough]]
+#else
+	#define AIL_FALL_THROUGH() __attribute__((fallthrough))
+#endif
+
 #define AIL_STRINGIZE2(x) #x
 #define AIL_STRINGIZE(x) AIL_STRINGIZE2(x)
 #define AIL_STR_LINE AIL_STRINGIZE(__LINE__)
