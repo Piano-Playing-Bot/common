@@ -4,8 +4,6 @@ This document collects the specifications of all protocols and formats that were
 
 This section specifies the format of PIDI-files. PIDI serves as a memory-efficient and simple-to-use format for storing all data required to play a song automatically on a piano.
 
-## RFCs
-
 ## Specification
 
 PIDI stands for `PIano Digital Interface`.
@@ -119,8 +117,6 @@ The filename of the PIDI file, that contains the data for the given song. It sho
 # Self-Playing-Piano Protocol
 
 This section outlines the protocol used for the communication between the UI and the microcontroller (MC), that plays the music. The UI and MC are also referred to as nodes in this specifcation.
-
-## RFCs
 
 ## Specification
 
