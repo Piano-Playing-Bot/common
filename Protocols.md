@@ -48,7 +48,6 @@ The length specifies the amount of centiseconds for which the command should be 
 
 - **octave:**
 The octave gives the octave offset of the musical note that this chunk refers to. The key and octave together specify a specific key on a piano.
-
 The octave should be interpreted as a signed 4-bit integer using two's complement. 0 refers to the middle octave on a piano. Negative numbers refer to octaves below the middle one, while positive numbers refer to higher octaves.
 
 - **key:**
