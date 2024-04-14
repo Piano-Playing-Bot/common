@@ -132,9 +132,7 @@ The protocol's Magic bytes are: `SPP`. It is always written in big-endian format
 
 - **Message-Type:**
 The different types of messages that exist, are listed below under `Payload`. Each message type has its own 1 character signature, by which it is defined.
-
 Should a node not recognize the provided message type, it should ignore all following bytes until it reads the Magic Bytes again. Version upgrades should easily stay backward-compatible that way.
-
 The protocol uses the convention to use ASCII-encoded characters for the Message Type's identifier. Uppercase characters are used for messages sent by the UI and lowercase characters for messages sent by the MC.
 
 - **Payload:**
